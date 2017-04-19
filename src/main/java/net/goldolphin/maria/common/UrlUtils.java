@@ -22,7 +22,7 @@ public class UrlUtils {
             }
 
             int len = path.length();
-            for (int i = 0; i < len; i ++) {
+            for (int i = 0; i < len; ++i) {
                 char c = path.charAt(i);
                 if (c != DELIMITER || last != DELIMITER) {
                     buffer.append(c);
@@ -32,5 +32,15 @@ public class UrlUtils {
         }
 
         return buffer.toString();
+    }
+
+    public static String getParent(String path) {
+        int i = path.lastIndexOf(DELIMITER);
+        return path.substring(0, i);
+    }
+
+    public static String getBasename(String path) {
+        int i = path.lastIndexOf(DELIMITER);
+        return path.substring(i);
     }
 }

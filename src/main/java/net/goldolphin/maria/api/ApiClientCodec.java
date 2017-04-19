@@ -1,15 +1,9 @@
 package net.goldolphin.maria.api;
 
-import java.io.IOException;
-import java.lang.reflect.Method;
-
-import io.netty.handler.codec.http.FullHttpResponse;
-import io.netty.handler.codec.http.HttpRequest;
-
 /**
- * Created by caofuxiang on 2017/4/14.
+ * Created by caofuxiang on 2017/4/19.
  */
-public interface ApiClientCodec {
-    HttpRequest encodeRequest(Method method, Object[] args);
-    Object decodeResponse(Method method, FullHttpResponse httpResponse) throws IOException;
+public interface ApiClientCodec<REQUEST, RESPONSE, ENC_REQUEST, ENC_RESPONSE> {
+    ENC_REQUEST encodeRequest(REQUEST request);
+    RESPONSE decodeResponse(REQUEST request, ENC_RESPONSE encoded);
 }
