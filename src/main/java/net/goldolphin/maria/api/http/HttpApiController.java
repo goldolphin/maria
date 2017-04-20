@@ -14,11 +14,11 @@ import net.goldolphin.maria.api.ApiServerCodec;
 /**
  * Created by caofuxiang on 2017/4/18.
  */
-public class ApiController<REQUEST, RESPONSE> implements IHttpController {
+public class HttpApiController<REQUEST, RESPONSE> implements IHttpController {
     private final ApiHandler<REQUEST, CompletableFuture<RESPONSE>> handler;
     private final ApiServerCodec<REQUEST, RESPONSE, FullHttpRequest, HttpResponse> codec;
 
-    public ApiController(ApiHandler<REQUEST, CompletableFuture<RESPONSE>> handler,
+    public HttpApiController(ApiHandler<REQUEST, CompletableFuture<RESPONSE>> handler,
             ApiServerCodec<REQUEST, RESPONSE, FullHttpRequest, HttpResponse> codec) {
         this.handler = handler;
         this.codec = codec;
@@ -27,11 +27,15 @@ public class ApiController<REQUEST, RESPONSE> implements IHttpController {
     @Override
     public void handle(Map<String, String> pathParams, HttpContext context) throws Exception {
         REQUEST request = codec.decodeRequest(context.getRequest());
-        handler.call(request)
-                .thenAccept(response -> context.send(codec.encodeResponse(response)))
-                .exceptionally(e -> {
-                    context.sendError(HttpResponseStatus.INTERNAL_SERVER_ERROR);
-                    return null;
-                });
+        try {
+            handler.call(request)
+                    .thenAccept(response -> context.send(codec.encodeResponse(response)))
+                    .exceptionally(e -> {
+                        context.sendError(HttpResponseStatus.INTERNAL_SERVER_ERROR);
+                        return null;
+                    });
+        } catch (Exception e) {
+            context.sendError(HttpResponseStatus.INTERNAL_SERVER_ERROR);
+        }
     }
 }

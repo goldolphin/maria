@@ -10,6 +10,6 @@ import org.junit.Test;
 public class UrlUtilsTest {
     @Test
     public void testConcat() throws Exception {
-        Assert.assertEquals("aaaa/bbbb/cccc/dddd/eeee/ffff/", UrlUtils.concat("aaaa", "bbbb///cccc///", "/////dddd", "///eeee", "/ffff/"));
+        Assert.assertEquals("aaaa/bbbb/cccc/dddd/eeee/ffff/", UrlUtils.concat("aaaa", "bbbb/cccc/", "/dddd", "/eeee", "/ffff/"));
     }
 }

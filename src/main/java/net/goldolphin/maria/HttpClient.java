@@ -80,7 +80,7 @@ public class HttpClient {
         return execute(request, 10, TimeUnit.SECONDS);
     }
 
-    public CompletableFuture<FullHttpResponse> execute(final HttpRequest request, final long delay, final TimeUnit unit) {
+    public CompletableFuture<FullHttpResponse> execute(final HttpRequest request, final long timeout, final TimeUnit unit) {
         final CompletableFuture<FullHttpResponse> future = new CompletableFuture<>();
         String host;
         int port;
@@ -122,11 +122,11 @@ public class HttpClient {
                     channel.writeAndFlush(request).addListener(new ChannelFutureListener() {
                         public void operationComplete(ChannelFuture f) {
                             if (f.isSuccess()) {
-                                if (delay > 0) {
+                                if (timeout > 0) {
                                     f.channel().eventLoop().schedule(() -> {
                                         future.completeExceptionally(new TimeoutException("Time is out"));
                                         channel.close();
-                                    }, delay, unit);
+                                    }, timeout, unit);
                                 }
                             } else {
                                 future.completeExceptionally(f.cause());

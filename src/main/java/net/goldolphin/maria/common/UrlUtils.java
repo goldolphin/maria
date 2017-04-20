@@ -5,33 +5,20 @@ package net.goldolphin.maria.common;
  *         2014-03-19 15:35
  */
 public class UrlUtils {
-    private static final char DELIMITER = '/';
+    private static final String DELIMITER = "/";
 
     /**
      * Concat several url paths into one.
-     * @param paths
+     * @param parent
+     * @param parts
      * @return
      */
-    public static String concat(String ... paths) {
-        StringBuilder buffer = new StringBuilder();
-        char last = Character.MIN_VALUE;
-        for (String path: paths) {
-            if (last != DELIMITER && buffer.length() > 0) {
-                buffer.append(DELIMITER);
-                last = DELIMITER;
-            }
-
-            int len = path.length();
-            for (int i = 0; i < len; ++i) {
-                char c = path.charAt(i);
-                if (c != DELIMITER || last != DELIMITER) {
-                    buffer.append(c);
-                }
-                last = c;
-            }
+    public static String concat(String parent, String ... parts) {
+        StringBuilder builder = new StringBuilder(parent);
+        for (String part: parts) {
+            joinPaths(builder, part);
         }
-
-        return buffer.toString();
+        return builder.toString();
     }
 
     public static String getParent(String path) {
@@ -41,6 +28,33 @@ public class UrlUtils {
 
     public static String getBasename(String path) {
         int i = path.lastIndexOf(DELIMITER);
-        return path.substring(i);
+        return path.substring(i + 1);
+    }
+
+    private static void joinPaths(StringBuilder parent, String child) {
+        if (child == null || child.length() == 0) {
+            return;
+        }
+        if (!endsWith(parent, DELIMITER)) {
+            parent.append(DELIMITER);
+        }
+        if (child.startsWith(DELIMITER)) {
+            parent.append(child.substring(DELIMITER.length()));
+        } else {
+            parent.append(child);
+        }
+    }
+
+    private static boolean endsWith(StringBuilder builder, String prefix) {
+        int begin = builder.length() - prefix.length();
+        if (begin < 0) {
+            return false;
+        }
+        for (int i = 0; i < prefix.length(); ++i) {
+            if (builder.charAt(begin + i) != prefix.charAt(i)) {
+                return false;
+            }
+        }
+        return true;
     }
 }

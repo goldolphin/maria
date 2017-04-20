@@ -13,25 +13,27 @@ import net.goldolphin.maria.api.ApiHandler;
 /**
  * Created by caofuxiang on 2017/4/19.
  */
-public class ApiClientHandler<REQUEST, RESPONSE> implements ApiHandler<REQUEST, CompletableFuture<RESPONSE>> {
+public class HttpApiClientHandler<REQUEST, RESPONSE> implements ApiHandler<REQUEST, CompletableFuture<RESPONSE>> {
     private final ApiClientCodec<REQUEST, RESPONSE, HttpRequest, FullHttpResponse> codec;
     private final HttpClient httpClient;
-    private final long timeoutMs;
+    private final long timeout;
+    private final TimeUnit unit;
 
-    public ApiClientHandler(ApiClientCodec<REQUEST, RESPONSE, HttpRequest, FullHttpResponse> codec, HttpClient httpClient, long timeoutMs) {
+    public HttpApiClientHandler(ApiClientCodec<REQUEST, RESPONSE, HttpRequest, FullHttpResponse> codec, HttpClient httpClient, long timeout, TimeUnit unit) {
         this.codec = codec;
         this.httpClient = httpClient;
-        this.timeoutMs = timeoutMs;
+        this.timeout = timeout;
+        this.unit = unit;
     }
 
     @Override
     public CompletableFuture<RESPONSE> call(REQUEST request) {
-        return httpClient.execute(codec.encodeRequest(request), timeoutMs, TimeUnit.MILLISECONDS)
+        return httpClient.execute(codec.encodeRequest(request), timeout, unit)
                 .thenApply(response -> {
                     if (response.getStatus().equals(HttpResponseStatus.OK)) {
                         return codec.decodeResponse(request, response);
                     }
-                    throw new RuntimeException("Service Unavailable");
+                    throw new RuntimeException("Service Unavailable: " + response.getStatus());
                 });
     }
 }

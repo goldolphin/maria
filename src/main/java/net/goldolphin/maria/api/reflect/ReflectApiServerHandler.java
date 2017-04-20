@@ -6,13 +6,13 @@ import net.goldolphin.maria.api.ApiServerCodec;
 /**
  * Created by caofuxiang on 2017/4/19.
  */
-public class ReflectServerHandler<REQUEST, RESPONSE> implements ApiHandler<REQUEST, RESPONSE> {
+public class ReflectApiServerHandler<REQUEST, RESPONSE> implements ApiHandler<REQUEST, RESPONSE> {
     private final Object implement;
     private final ApiServerCodec<MethodAndArgs, Object, REQUEST, RESPONSE> codec;
-    private final ErrorHandler<RESPONSE> errorHandler;
+    private final ErrorHandler<?> errorHandler;
 
-    public ReflectServerHandler(Object implement, ApiServerCodec<MethodAndArgs, Object, REQUEST, RESPONSE> codec,
-            ErrorHandler<RESPONSE> errorHandler) {
+    public ReflectApiServerHandler(Object implement, ApiServerCodec<MethodAndArgs, Object, REQUEST, RESPONSE> codec,
+            ErrorHandler<?> errorHandler) {
         this.implement = implement;
         this.codec = codec;
         this.errorHandler = errorHandler;
@@ -25,7 +25,7 @@ public class ReflectServerHandler<REQUEST, RESPONSE> implements ApiHandler<REQUE
             Object ret = methodAndArgs.getMethod().invoke(implement, methodAndArgs.getArgs());
             return codec.encodeResponse(ret);
         } catch (Throwable e) {
-            return errorHandler.onError(e);
+            return codec.encodeResponse(errorHandler.onError(e));
         }
     }
 }

@@ -16,11 +16,7 @@ import java.util.Map;
  */
 public class HttpDispatcher {
     private static final org.slf4j.Logger logger = LoggerFactory.getLogger(HttpDispatcher.class);
-    private static final IHttpController NOT_FOUND_CONTROLLER = new IHttpController() {
-        public void handle(Map<String, String> pathParams, HttpContext context) throws Exception {
-            context.sendNotFound();
-        }
-    };
+    private static final IHttpController NOT_FOUND_CONTROLLER = (pathParams, context) -> context.sendNotFound();
 
     private final UrlMatcher<IHttpController> controllerMatcher = UrlMatcher.newInstance();
     private final IHttpController defaultController;
