@@ -10,4 +10,11 @@ public class ExceptionUtils {
         }
         return new RuntimeException(e);
     }
+
+    public static Throwable getRootCause(Throwable e) {
+        if (e.getCause() == null) {
+            return e;
+        }
+        return getRootCause(e.getCause());
+    }
 }

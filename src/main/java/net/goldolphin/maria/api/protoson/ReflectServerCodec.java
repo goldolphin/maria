@@ -20,11 +20,11 @@ import net.goldolphin.maria.common.ProtoJsonCodec;
  */
 public class ReflectServerCodec implements ApiServerCodec<MethodAndArgs, Object, Request, Response> {
     private final Map<String, Entry> map;
-    private final ErrorHandler errorHandler;
+    private final ResponseVisitor responseVisitor;
 
-    private ReflectServerCodec(Map<String, Entry> map, ErrorHandler errorHandler) {
+    private ReflectServerCodec(Map<String, Entry> map, ResponseVisitor responseVisitor) {
         this.map = map;
-        this.errorHandler = errorHandler;
+        this.responseVisitor = responseVisitor;
     }
 
     @Override
@@ -53,12 +53,12 @@ public class ReflectServerCodec implements ApiServerCodec<MethodAndArgs, Object,
         try {
             JsonGenerator generator = JsonUtils.factory().createGenerator(writer);
             generator.writeStartObject();
-            Message error = errorHandler.getError(response);
+            Message error = responseVisitor.getError(response);
             if (error != null) {
                 generator.writeFieldName("error");
                 generator.writeRawValue(ProtoJsonCodec.toString(error));
             } else {
-                Message result = errorHandler.getResult(response);
+                Message result = responseVisitor.getResult(response);
                 if (result != null) {
                     generator.writeFieldName("result");
                     generator.writeRawValue(ProtoJsonCodec.toString(result));
@@ -72,13 +72,14 @@ public class ReflectServerCodec implements ApiServerCodec<MethodAndArgs, Object,
         }
     }
 
-    public static ReflectServerCodec create(Class<?> interfaceClass, Object implement, ErrorHandler errorHandler) throws NoSuchMethodException {
+    public static ReflectServerCodec create(Class<?> interfaceClass, Object implement, ResponseVisitor responseVisitor)
+            throws NoSuchMethodException {
         Map<String, Entry> map = new HashMap<>();
         for (Method m: (Iterable<Method>) ProtosonUtils.readInterface(interfaceClass)::iterator) {
             Method method = implement.getClass().getMethod(m.getName(), m.getParameterTypes());
             map.put(method.getName(), new Entry(method, ProtosonUtils.getRequestPrototype(method)));
         }
-        return new ReflectServerCodec(map, errorHandler);
+        return new ReflectServerCodec(map, responseVisitor);
     }
 
     private static class Entry {
@@ -87,7 +88,7 @@ public class ReflectServerCodec implements ApiServerCodec<MethodAndArgs, Object,
 
         public Entry(Method method, Message requestPrototype) {
             this.method = method;
-            this.requestPrototype= requestPrototype;
+            this.requestPrototype = requestPrototype;
         }
     }
 }

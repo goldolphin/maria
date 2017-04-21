@@ -1,17 +1,22 @@
 package net.goldolphin.maria;
 
-import net.goldolphin.maria.common.MessageUtils;
-import net.goldolphin.maria.restful.RestfulController;
-import io.netty.handler.codec.http.*;
-import io.netty.util.CharsetUtil;
-import org.junit.Assert;
-import org.junit.Test;
-
 import java.net.InetSocketAddress;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Map;
+
+import org.junit.Assert;
+import org.junit.Test;
+
+import io.netty.handler.codec.http.FullHttpRequest;
+import io.netty.handler.codec.http.HttpHeaders;
+import io.netty.handler.codec.http.HttpMethod;
+import io.netty.handler.codec.http.HttpRequest;
+import io.netty.handler.codec.http.HttpResponseStatus;
+import io.netty.util.CharsetUtil;
+import net.goldolphin.maria.common.MessageUtils;
+import net.goldolphin.maria.restful.RestfulController;
 
 /**
  * @author caofuxiang
@@ -38,7 +43,7 @@ public class HttpServerTest {
                 request.content().readBytes(bytes);
                 String received = new String(bytes);
                 System.out.println("Server: " + received);
-                context.send("application/oms", bytes);
+                context.send("application/maria", bytes);
             }
         });
 
@@ -48,23 +53,26 @@ public class HttpServerTest {
 
         // Get
         HttpRequest httpGet = MessageUtils.newHttpRequest(HttpMethod.GET, "http://localhost:6060/hi?q=s");
-        FullHttpResponse response = client.execute(httpGet).thenApply(FullHttpResponse::copy).get();
-        Assert.assertEquals(HttpResponseStatus.OK, response.getStatus());
-        Assert.assertEquals("Hello, world!", response.content().toString(CharsetUtil.UTF_8));
+        client.execute(httpGet).thenAccept(response -> {
+            Assert.assertEquals(HttpResponseStatus.OK, response.getStatus());
+            Assert.assertEquals("Hello, world!", response.content().toString(CharsetUtil.UTF_8));
+        }).get();
 
         // Post
         HttpRequest httpPost = MessageUtils.newHttpRequest(HttpMethod.POST, "http://localhost:6060/hi");
-        response = client.execute(httpPost).thenApply(FullHttpResponse::copy).get();
-        Assert.assertEquals(HttpResponseStatus.NOT_FOUND, response.getStatus());
+        client.execute(httpPost).thenAccept(response -> {
+            Assert.assertEquals(HttpResponseStatus.NOT_FOUND, response.getStatus());
+        }).get();
 
         // Put
         String request = "request";
         HttpRequest httpPut = MessageUtils.newHttpRequest(HttpMethod.PUT, "http://localhost:6060/hi", request);
-        response = client.execute(httpPut).thenApply(FullHttpResponse::copy).get();
-        Assert.assertEquals(HttpResponseStatus.OK, response.getStatus());
-        String received = response.content().toString(CharsetUtil.UTF_8);
-        System.out.println("Client: " + received);
-        Assert.assertEquals(request, received);
+        client.execute(httpPut).thenAccept(response -> {
+            Assert.assertEquals(HttpResponseStatus.OK, response.getStatus());
+            String received = response.content().toString(CharsetUtil.UTF_8);
+            System.out.println("Client: " + received);
+            Assert.assertEquals(request, received);
+        }).get();
 
         server.stop(true);
     }
