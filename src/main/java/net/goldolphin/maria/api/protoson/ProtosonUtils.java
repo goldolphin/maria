@@ -8,7 +8,6 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Stream;
 
-import com.google.protobuf.DescriptorProtos;
 import com.google.protobuf.Descriptors;
 import com.google.protobuf.Message;
 
@@ -76,8 +75,13 @@ public class ProtosonUtils {
             }
             Descriptors.FieldDescriptor f = fields.get(i);
             builder.append(f.getName()).append(":");
-            if (f.toProto().getLabel() == DescriptorProtos.FieldDescriptorProto.Label.LABEL_REPEATED) {
+            if (f.isRepeated()) {
                 builder.append("[");
+                if (f.isMapField()) {
+                    builder.append("\"MAP\",");
+                } else {
+                    builder.append("\"LIST\",");
+                }
                 appendFieldValue(f, builder);
                 builder.append("]");
             } else {
