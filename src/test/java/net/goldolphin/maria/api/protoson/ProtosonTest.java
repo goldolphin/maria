@@ -16,11 +16,13 @@ import org.junit.Test;
 import com.google.protobuf.DoubleValue;
 import com.google.protobuf.Int64Value;
 import com.google.protobuf.Message;
+import com.google.protobuf.StringValue;
 
 import net.goldolphin.maria.HttpClient;
 import net.goldolphin.maria.HttpDispatcher;
 import net.goldolphin.maria.HttpServer;
 import net.goldolphin.maria.api.cli.CliEvaluator;
+import net.goldolphin.maria.common.ExceptionUtils;
 
 /**
  * Created by caofuxiang on 2017/4/20.
@@ -30,26 +32,12 @@ public class ProtosonTest {
     public void test() throws NoSuchMethodException, ExecutionException, InterruptedException {
         // Server
         HttpDispatcher dispatcher = new HttpDispatcher();
-        dispatcher.registerController("/api/$", Protoson.createHttpController(ApiClient.class, new Implement(),
-                throwable -> {
-                    throwable.printStackTrace();
-                    return null;
-                }, new ResponseVisitor() {
-                    @Override
-                    public Message getResult(Message response) {
-                        return response;
-                    }
-
-                    @Override
-                    public Message getError(Message response) {
-                        return null;
-                    }
-                }));
+        dispatcher.registerController("/api/$", Protoson.createHttpController(ApiClient.class, new Implement(), new MyErrorCodec()));
         HttpServer httpServer = new HttpServer(new InetSocketAddress(6061), dispatcher);
         HttpClient httpClient = new HttpClient();
         try {
             httpServer.start();
-            ApiClient apiClient = Protoson.createClient(ApiClient.class, "http://localhost:6061/api",
+            ApiClient apiClient = Protoson.createClient(ApiClient.class, new MyErrorCodec(), "http://localhost:6061/api",
                     httpClient, 10, TimeUnit.SECONDS);
 
             Assert.assertEquals(10, apiClient.get10().get().getValue());
@@ -62,28 +50,16 @@ public class ProtosonTest {
 
     @Test
     public void testCli() throws NoSuchMethodException, IOException {
-        CliEvaluator evaluator = Protoson.createLocalCliEvaluator(ApiClient.class, new Implement(),
-                throwable -> {
-                    throwable.printStackTrace();
-                    return null;
-                }, new ResponseVisitor() {
-                    @Override
-                    public Message getResult(Message response) {
-                        return response;
-                    }
-
-                    @Override
-                    public Message getError(Message response) {
-                        return null;
-                    }
-                }, "testCli 0.0.1");
-
+        CliEvaluator evaluator = Protoson.createLocalCliEvaluator(ApiClient.class, new Implement(), new MyErrorCodec(), "testCli 0.0.1");
         StringBuilder builder = new StringBuilder();
         builder.append("/help\n");
         builder.append("/help get10\n");
         builder.append("/help sin\n");
         builder.append("get10\n");
         builder.append("sin 10\n");
+        builder.append("sinSync 10\n");
+        builder.append("cos 10\n");
+        builder.append("sin abc\n");
         Reader input = new StringReader(builder.toString());
         Writer output = new StringWriter();
         Writer error = new StringWriter();
@@ -97,6 +73,7 @@ public class ProtosonTest {
     private interface ApiClient {
         CompletableFuture<Int64Value> get10();
         CompletableFuture<DoubleValue> sin(DoubleValue value);
+        DoubleValue sinSync(DoubleValue value);
     }
 
     public static class Implement {
@@ -106,6 +83,28 @@ public class ProtosonTest {
 
         public CompletableFuture<DoubleValue> sin(DoubleValue value) {
             return CompletableFuture.completedFuture(DoubleValue.newBuilder().setValue(Math.sin(value.getValue())).build());
+        }
+
+        public CompletableFuture<DoubleValue> sinSync(DoubleValue value) {
+            return sin(value);
+        }
+    }
+
+    private static class MyErrorCodec implements ErrorCodec {
+
+        @Override
+        public Message encode(Throwable error) {
+            return StringValue.newBuilder().setValue(ExceptionUtils.getRootCause(error).getMessage()).build();
+        }
+
+        @Override
+        public Throwable decode(Message encoded) {
+            return null;
+        }
+
+        @Override
+        public Message getErrorMessageProtoType() {
+            return StringValue.getDefaultInstance();
         }
     }
 }

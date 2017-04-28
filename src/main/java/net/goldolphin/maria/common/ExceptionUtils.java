@@ -12,9 +12,11 @@ public class ExceptionUtils {
     }
 
     public static Throwable getRootCause(Throwable e) {
-        if (e.getCause() == null) {
-            return e;
+        while (true) {
+            if (e.getCause() == null) {
+                return e;
+            }
+            e = e.getCause();
         }
-        return getRootCause(e.getCause());
     }
 }

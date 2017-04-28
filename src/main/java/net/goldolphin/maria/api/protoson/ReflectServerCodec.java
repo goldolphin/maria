@@ -8,9 +8,11 @@ import java.util.Map;
 
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.google.protobuf.Message;
+import com.google.protobuf.MessageOrBuilder;
 
 import net.goldolphin.maria.api.ApiServerCodec;
 import net.goldolphin.maria.api.reflect.MethodAndArgs;
+import net.goldolphin.maria.api.reflect.ResultOrError;
 import net.goldolphin.maria.common.ExceptionUtils;
 import net.goldolphin.maria.common.JsonUtils;
 import net.goldolphin.maria.common.ProtoJsonCodec;
@@ -18,13 +20,13 @@ import net.goldolphin.maria.common.ProtoJsonCodec;
 /**
  * Created by caofuxiang on 2017/4/19.
  */
-public class ReflectServerCodec implements ApiServerCodec<MethodAndArgs, Object, Request, Response> {
+public class ReflectServerCodec implements ApiServerCodec<MethodAndArgs, ResultOrError, Request, Response> {
     private final Map<String, Entry> map;
-    private final ResponseVisitor responseVisitor;
+    private final ErrorCodec errorCodec;
 
-    private ReflectServerCodec(Map<String, Entry> map, ResponseVisitor responseVisitor) {
+    private ReflectServerCodec(Map<String, Entry> map, ErrorCodec errorCodec) {
         this.map = map;
-        this.responseVisitor = responseVisitor;
+        this.errorCodec = errorCodec;
     }
 
     @Override
@@ -47,21 +49,18 @@ public class ReflectServerCodec implements ApiServerCodec<MethodAndArgs, Object,
     }
 
     @Override
-    public Response encodeResponse(Object o) {
-        Message response = (Message) o;
+    public Response encodeResponse(ResultOrError resultOrError) {
         StringWriter writer = new StringWriter();
         try {
             JsonGenerator generator = JsonUtils.factory().createGenerator(writer);
             generator.writeStartObject();
-            Message error = responseVisitor.getError(response);
-            if (error != null) {
+            if (resultOrError.isError()) {
                 generator.writeFieldName("error");
-                generator.writeRawValue(ProtoJsonCodec.toString(error));
+                generator.writeRawValue(ProtoJsonCodec.toString(errorCodec.encode(resultOrError.getError())));
             } else {
-                Message result = responseVisitor.getResult(response);
-                if (result != null) {
+                if (resultOrError.getResult() != null) {
                     generator.writeFieldName("result");
-                    generator.writeRawValue(ProtoJsonCodec.toString(result));
+                    generator.writeRawValue(ProtoJsonCodec.toString((MessageOrBuilder) resultOrError.getResult()));
                 }
             }
             generator.writeEndObject();
@@ -72,14 +71,19 @@ public class ReflectServerCodec implements ApiServerCodec<MethodAndArgs, Object,
         }
     }
 
-    public static ReflectServerCodec create(Class<?> interfaceClass, Object implement, ResponseVisitor responseVisitor)
-            throws NoSuchMethodException {
+    public static ReflectServerCodec create(Class<?> interfaceClass, Object implement, ErrorCodec errorCodec) {
         Map<String, Entry> map = new HashMap<>();
         for (Method m: (Iterable<Method>) ProtosonUtils.readInterface(interfaceClass)::iterator) {
-            Method method = implement.getClass().getMethod(m.getName(), m.getParameterTypes());
-            map.put(method.getName(), new Entry(method, ProtosonUtils.getRequestPrototype(method)));
+            try {
+                Method method = implement.getClass().getMethod(m.getName(), m.getParameterTypes());
+                if (map.putIfAbsent(method.getName(), new Entry(method, ProtosonUtils.getRequestPrototype(method))) != null){
+                    throw new IllegalArgumentException("Duplicate method name: " + method.getName());
+                }
+            } catch (Exception e) {
+                throw ExceptionUtils.toUnchecked(e);
+            }
         }
-        return new ReflectServerCodec(map, responseVisitor);
+        return new ReflectServerCodec(map, errorCodec);
     }
 
     private static class Entry {

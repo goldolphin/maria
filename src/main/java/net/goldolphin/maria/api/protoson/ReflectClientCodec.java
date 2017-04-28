@@ -1,6 +1,5 @@
 package net.goldolphin.maria.api.protoson;
 
-import java.io.IOException;
 import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.Map;
@@ -10,6 +9,7 @@ import com.google.protobuf.Message;
 
 import net.goldolphin.maria.api.ApiClientCodec;
 import net.goldolphin.maria.api.reflect.MethodAndArgs;
+import net.goldolphin.maria.api.reflect.ResultOrError;
 import net.goldolphin.maria.common.ExceptionUtils;
 import net.goldolphin.maria.common.JsonUtils;
 import net.goldolphin.maria.common.ProtoJsonCodec;
@@ -17,11 +17,13 @@ import net.goldolphin.maria.common.ProtoJsonCodec;
 /**
  * Created by caofuxiang on 2017/4/19.
  */
-public class ReflectClientCodec implements ApiClientCodec<MethodAndArgs, Object, Request, Response> {
+public class ReflectClientCodec implements ApiClientCodec<MethodAndArgs, ResultOrError, Request, Response> {
     private final Map<String, Entry> map;
+    private final ErrorCodec errorCodec;
 
-    private ReflectClientCodec(Map<String, Entry> map) {
+    private ReflectClientCodec(Map<String, Entry> map, ErrorCodec errorCodec) {
         this.map = map;
+        this.errorCodec = errorCodec;
     }
 
     @Override
@@ -34,32 +36,37 @@ public class ReflectClientCodec implements ApiClientCodec<MethodAndArgs, Object,
     }
 
     @Override
-    public Object decodeResponse(MethodAndArgs request, Response encoded) {
+    public ResultOrError decodeResponse(MethodAndArgs request, Response encoded) {
         try {
             JsonNode json = JsonUtils.read(encoded.getContent(), JsonNode.class);
             if (json.has("error")) {
-                throw new IOException(json.path("description").asText());
+                Message error = ProtoJsonCodec.fromString(json.path("error").toString(),
+                        errorCodec.getErrorMessageProtoType().newBuilderForType()).build();
+                return ResultOrError.fromError(errorCodec.decode(error));
             }
             Entry entry = map.get(request.getMethod().getName());
             if (entry == null) {
                 throw new NoSuchMethodException(request.getMethod().getName());
             }
             if (entry.responsePrototype == null) {
-                return null;
+                return ResultOrError.fromResult(null);
             } else {
-                return ProtoJsonCodec.fromString(json.path("result").toString(), entry.responsePrototype.newBuilderForType()).build();
+                return ResultOrError.fromResult(ProtoJsonCodec.fromString(json.path("result").toString(),
+                        entry.responsePrototype.newBuilderForType()).build());
             }
         } catch (Throwable e) {
             throw ExceptionUtils.toUnchecked(e);
         }
     }
 
-    public static ReflectClientCodec create(Class<?> interfaceClass) {
+    public static ReflectClientCodec create(Class<?> interfaceClass, ErrorCodec errorCodec) {
         Map<String, Entry> map = new HashMap<>();
         for (Method method: (Iterable<Method>) ProtosonUtils.readInterface(interfaceClass)::iterator) {
-            map.put(method.getName(), new Entry(ProtosonUtils.getResponsePrototype(method)));
+            if (map.putIfAbsent(method.getName(), new Entry(ProtosonUtils.getResponsePrototype(method))) != null){
+                throw new IllegalArgumentException("Duplicate method name: " + method.getName());
+            }
         }
-        return new ReflectClientCodec(map);
+        return new ReflectClientCodec(map, errorCodec);
     }
 
     private static class Entry {

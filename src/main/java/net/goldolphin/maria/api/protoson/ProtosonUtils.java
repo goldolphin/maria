@@ -19,14 +19,17 @@ public class ProtosonUtils {
         return Arrays.stream(interfaceClass.getMethods()).filter(method -> !Modifier.isStatic(method.getModifiers()) && !method.isDefault());
     }
 
+    public static boolean isAsync(Method method) {
+        Class<?> returnType = method.getReturnType();
+        return returnType.equals(CompletableFuture.class);
+    }
+
     public static Message getResponsePrototype(Method method) {
         try {
-            ParameterizedType returnType = (ParameterizedType) method.getGenericReturnType();
-            if (!returnType.getRawType().equals(CompletableFuture.class)) {
-                throw new IllegalArgumentException();
-            }
-            Class<?> actualClass = (Class<?>) returnType.getActualTypeArguments()[0];
-            if (actualClass.equals(Void.class)) {
+            Class<?> actualClass = isAsync(method)
+                    ? (Class<?>) ((ParameterizedType) method.getGenericReturnType()).getActualTypeArguments()[0]
+                    : method.getReturnType();
+            if (actualClass.equals(Void.class) || actualClass.equals(Void.TYPE)) {
                 return null;
             }
             Method getDefaultInstance = actualClass.getMethod("getDefaultInstance");
