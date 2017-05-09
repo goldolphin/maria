@@ -1,6 +1,16 @@
 package net.goldolphin.maria;
 
-import net.goldolphin.maria.common.MessageUtils;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+
+import javax.net.ssl.SSLException;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
@@ -21,17 +31,7 @@ import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 import io.netty.util.CharsetUtil;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import javax.net.ssl.SSLException;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
+import net.goldolphin.maria.common.MessageUtils;
 
 /**
  * @author goldolphin
@@ -40,14 +40,14 @@ import java.util.concurrent.TimeoutException;
 public class HttpClient {
     private static final Logger logger = LoggerFactory.getLogger(HttpClient.class);
 
-    private static final SslContext sslContext;
+    private static final SslContext SSL_CONTEXT;
     private final EventLoopGroup workerGroup;
     private final Bootstrap bootstrap;
 
     static {
         SslContextBuilder builder = SslContextBuilder.forClient().trustManager(InsecureTrustManagerFactory.INSTANCE);
         try {
-            sslContext = builder.build();
+            SSL_CONTEXT = builder.build();
         } catch (SSLException e) {
             throw new RuntimeException(e);
         }
@@ -116,7 +116,7 @@ public class HttpClient {
                 if (f.isSuccess()) {
                     final Channel channel = f.channel();
                     if (isHttps) {
-                        channel.pipeline().addFirst("ssl", sslContext.newHandler(channel.alloc()));
+                        channel.pipeline().addFirst("ssl", SSL_CONTEXT.newHandler(channel.alloc()));
                     }
                     channel.pipeline().addLast("handler", new HttpClientHandler(future));
                     channel.writeAndFlush(request).addListener(new ChannelFutureListener() {
@@ -124,7 +124,7 @@ public class HttpClient {
                             if (f.isSuccess()) {
                                 if (timeout > 0) {
                                     f.channel().eventLoop().schedule(() -> {
-                                        future.completeExceptionally(new TimeoutException("Time is out"));
+                                        future.completeExceptionally(new HttpTimeoutException("Time is out"));
                                         channel.close();
                                     }, timeout, unit);
                                 }

@@ -1,11 +1,11 @@
 package net.goldolphin.maria.restful;
 
-import net.goldolphin.maria.HttpContext;
-import net.goldolphin.maria.IHttpController;
-import io.netty.handler.codec.http.HttpMethod;
-
-import java.io.IOException;
 import java.util.Map;
+
+import io.netty.handler.codec.http.HttpMethod;
+import net.goldolphin.maria.HttpContext;
+import net.goldolphin.maria.HttpException;
+import net.goldolphin.maria.IHttpController;
 
 /**
  * @author caofuxiang
@@ -51,7 +51,7 @@ public class RestfulController implements IHttpController {
         } else if (method.equals(HttpMethod.OPTIONS)) {
             options(pathParams, context);
         } else {
-            throw new IOException("Unsupported method: " + method);
+            throw new HttpException("Unsupported method: " + method);
         }
     }
 }
