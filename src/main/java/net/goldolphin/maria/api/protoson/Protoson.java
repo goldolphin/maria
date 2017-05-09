@@ -1,5 +1,6 @@
 package net.goldolphin.maria.api.protoson;
 
+import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
@@ -29,10 +30,16 @@ import net.goldolphin.maria.common.ExceptionUtils;
 public class Protoson {
     public static <T> T createClient(Class<T> interfaceClass, ErrorCodec errorCodec,
             String serviceBase, HttpClient httpClient, long timeout, TimeUnit unit) {
+        return (T) Proxy.newProxyInstance(interfaceClass.getClassLoader(), new Class<?>[] {interfaceClass},
+                createInvocationHandler(interfaceClass, errorCodec, serviceBase, httpClient, timeout, unit));
+    }
+
+    public static InvocationHandler createInvocationHandler(Class<?> interfaceClass, ErrorCodec errorCodec,
+            String serviceBase, HttpClient httpClient, long timeout, TimeUnit unit) {
         ReflectClientCodec codec = ReflectClientCodec.create(interfaceClass, errorCodec);
         HttpApiClientHandler<Request, Response> httpApiClientHandler
                 = new HttpApiClientHandler<>(new HttpClientCodec(serviceBase), httpClient, timeout, unit);
-        return (T) Proxy.newProxyInstance(interfaceClass.getClassLoader(), new Class<?>[] {interfaceClass}, (proxy, method, args) -> {
+        return (proxy, method, args) -> {
             MethodAndArgs methodAndArgs = new MethodAndArgs(method, args);
             CompletableFuture<Response> response = httpApiClientHandler.call(codec.encodeRequest(methodAndArgs));
             if (ProtosonUtils.isAsync(method)) {
@@ -50,7 +57,7 @@ public class Protoson {
             }
             return resultOrError.getResult();
 
-        });
+        };
     }
 
     public static IHttpController createHttpController(Class<?> interfaceClass, Object implement, ErrorCodec errorCodec) {
