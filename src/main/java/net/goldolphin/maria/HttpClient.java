@@ -80,7 +80,7 @@ public class HttpClient {
         return execute(request, 10, TimeUnit.SECONDS);
     }
 
-    public CompletableFuture<FullHttpResponse> execute(final HttpRequest request, final long timeout, final TimeUnit unit) {
+    public CompletableFuture<FullHttpResponse> execute(HttpRequest request, final long timeout, final TimeUnit unit) {
         final CompletableFuture<FullHttpResponse> future = new CompletableFuture<>();
         String host;
         int port;

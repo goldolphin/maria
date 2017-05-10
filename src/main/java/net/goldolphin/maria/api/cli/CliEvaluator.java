@@ -6,23 +6,18 @@ import java.io.Reader;
 import java.io.Writer;
 
 import net.goldolphin.maria.api.ApiHandler;
-import net.goldolphin.maria.api.ApiServerCodec;
 import net.goldolphin.maria.common.ExceptionUtils;
 
 /**
  * Created by caofuxiang on 2017/4/21.
  */
 public class CliEvaluator {
-    private final ApiHandler<Object, Object> handler;
-    private final ApiServerCodec<Object, Object, String[], String> codec;
+    private final ApiHandler<String[], String> handler;
     private final CliCommandHandler commandHandler;
     private final String description;
 
-    public <REQUEST, RESPONSE> CliEvaluator(ApiHandler<REQUEST, RESPONSE> handler,
-            ApiServerCodec<REQUEST, RESPONSE, String[], String> codec,
-            CliCommandHandler commandHandler, String description) {
-        this.handler = (ApiHandler<Object, Object>) handler;
-        this.codec = (ApiServerCodec<Object, Object, String[], String>) codec;
+    public CliEvaluator(ApiHandler<String[], String> handler, CliCommandHandler commandHandler, String description) {
+        this.handler = handler;
         this.commandHandler = commandHandler;
         this.description = description;
     }
@@ -66,9 +61,7 @@ public class CliEvaluator {
         } else if (commandHandler.help(splits[0]) == null) {
             error.write("Unsupported method: " + splits[0] + "\n");
         } else {
-            Object request = codec.decodeRequest(splits);
-            Object response = handler.call(request);
-            output.write(codec.encodeResponse(response) + "\n");
+            output.write(handler.call(splits) + "\n");
         }
         return true;
     }

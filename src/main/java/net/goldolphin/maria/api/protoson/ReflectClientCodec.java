@@ -62,7 +62,7 @@ public class ReflectClientCodec implements ApiClientCodec<MethodAndArgs, ResultO
     public static ReflectClientCodec create(Class<?> interfaceClass, ErrorCodec errorCodec) {
         Map<String, Entry> map = new HashMap<>();
         for (Method method: (Iterable<Method>) ProtosonUtils.readInterface(interfaceClass)::iterator) {
-            if (map.putIfAbsent(method.getName(), new Entry(ProtosonUtils.getResponsePrototype(method))) != null){
+            if (map.putIfAbsent(method.getName(), new Entry(ProtosonUtils.getResponsePrototype(method))) != null) {
                 throw new IllegalArgumentException("Duplicate method name: " + method.getName());
             }
         }
