@@ -26,7 +26,9 @@ public class CliEvaluator {
         welcome(error);
         BufferedReader reader = input instanceof BufferedReader ? (BufferedReader) input : new BufferedReader(input);
         while (true) {
-            error.write(">>> ");
+            if (!reader.ready()) {
+                error.write(">>> ");
+            }
             output.flush();
             error.flush();
             String line = reader.readLine();
