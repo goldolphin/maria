@@ -8,8 +8,18 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Stream;
 
+import com.google.protobuf.BoolValue;
+import com.google.protobuf.BytesValue;
 import com.google.protobuf.Descriptors;
+import com.google.protobuf.DoubleValue;
+import com.google.protobuf.FloatValue;
+import com.google.protobuf.Int32Value;
+import com.google.protobuf.Int64Value;
 import com.google.protobuf.Message;
+import com.google.protobuf.StringValue;
+import com.google.protobuf.Timestamp;
+import com.google.protobuf.UInt32Value;
+import com.google.protobuf.UInt64Value;
 
 /**
  * Created by caofuxiang on 2017/4/20.
@@ -58,8 +68,20 @@ public class ProtosonUtils {
 
     public static String buildSchemaString(Message message) {
         if (message == null) {
-            return "void";
+            return "null";
         }
+
+        if (message instanceof BoolValue) return "\"" + Descriptors.FieldDescriptor.Type.BOOL + "\"";
+        if (message instanceof Int32Value) return "\"" + Descriptors.FieldDescriptor.Type.INT32 + "\"";
+        if (message instanceof UInt32Value) return "\"" + Descriptors.FieldDescriptor.Type.UINT32 + "\"";
+        if (message instanceof Int64Value) return "\"" + Descriptors.FieldDescriptor.Type.INT64 + "\"";
+        if (message instanceof UInt64Value) return "\"" + Descriptors.FieldDescriptor.Type.UINT64 + "\"";
+        if (message instanceof StringValue) return "\"" + Descriptors.FieldDescriptor.Type.STRING + "\"";
+        if (message instanceof BytesValue) return "\"" + Descriptors.FieldDescriptor.Type.BYTES + "\"";
+        if (message instanceof FloatValue) return "\"" + Descriptors.FieldDescriptor.Type.FLOAT + "\"";
+        if (message instanceof DoubleValue) return "\"" + Descriptors.FieldDescriptor.Type.DOUBLE + "\"";
+        if (message instanceof Timestamp) return "\"" + Descriptors.FieldDescriptor.Type.STRING + "\"";
+
         StringBuilder builder = new StringBuilder();
         buildSchema(message.getDescriptorForType(), builder);
         return builder.toString();
