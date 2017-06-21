@@ -1,13 +1,15 @@
 package net.goldolphin.maria.api.protoson;
 
+import java.io.IOException;
+import java.io.StringWriter;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.ParameterizedType;
 import java.util.Arrays;
-import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Stream;
 
+import com.fasterxml.jackson.core.JsonGenerator;
 import com.google.protobuf.BoolValue;
 import com.google.protobuf.BytesValue;
 import com.google.protobuf.Descriptors;
@@ -20,6 +22,9 @@ import com.google.protobuf.StringValue;
 import com.google.protobuf.Timestamp;
 import com.google.protobuf.UInt32Value;
 import com.google.protobuf.UInt64Value;
+
+import net.goldolphin.maria.common.ExceptionUtils;
+import net.goldolphin.maria.common.JsonUtils;
 
 /**
  * Created by caofuxiang on 2017/4/20.
@@ -67,71 +72,77 @@ public class ProtosonUtils {
     }
 
     public static String buildSchemaString(Message message) {
+        StringWriter writer = new StringWriter();
+        try {
+            buildSchema(JsonUtils.factory().createGenerator(writer), message);
+            return writer.toString();
+        } catch (IOException e) {
+            throw ExceptionUtils.toUnchecked(e);
+        }
+    }
+
+    public static void buildSchema(JsonGenerator generator, Message message) throws IOException {
         if (message == null) {
-            return "null";
+            generator.writeNull();
+        } else if (message instanceof BoolValue) {
+            generator.writeString(Descriptors.FieldDescriptor.Type.BOOL.toString());
+        } else if (message instanceof Int32Value) {
+            generator.writeString(Descriptors.FieldDescriptor.Type.INT32.toString());
+        } else if (message instanceof UInt32Value) {
+            generator.writeString(Descriptors.FieldDescriptor.Type.UINT32.toString());
+        } else if (message instanceof Int64Value) {
+            generator.writeString(Descriptors.FieldDescriptor.Type.INT64.toString());
+        } else if (message instanceof UInt64Value) {
+            generator.writeString(Descriptors.FieldDescriptor.Type.UINT64.toString());
+        } else if (message instanceof StringValue) {
+            generator.writeString(Descriptors.FieldDescriptor.Type.STRING.toString());
+        } else if (message instanceof BytesValue) {
+            generator.writeString(Descriptors.FieldDescriptor.Type.BYTES.toString());
+        } else if (message instanceof FloatValue) {
+            generator.writeString(Descriptors.FieldDescriptor.Type.FLOAT.toString());
+        } else if (message instanceof DoubleValue) {
+            generator.writeString(Descriptors.FieldDescriptor.Type.DOUBLE.toString());
+        } else if (message instanceof Timestamp) {
+            generator.writeString(Descriptors.FieldDescriptor.Type.STRING.toString());
+        } else {
+            buildSchema(generator, message.getDescriptorForType());
         }
-
-        if (message instanceof BoolValue) return "\"" + Descriptors.FieldDescriptor.Type.BOOL + "\"";
-        if (message instanceof Int32Value) return "\"" + Descriptors.FieldDescriptor.Type.INT32 + "\"";
-        if (message instanceof UInt32Value) return "\"" + Descriptors.FieldDescriptor.Type.UINT32 + "\"";
-        if (message instanceof Int64Value) return "\"" + Descriptors.FieldDescriptor.Type.INT64 + "\"";
-        if (message instanceof UInt64Value) return "\"" + Descriptors.FieldDescriptor.Type.UINT64 + "\"";
-        if (message instanceof StringValue) return "\"" + Descriptors.FieldDescriptor.Type.STRING + "\"";
-        if (message instanceof BytesValue) return "\"" + Descriptors.FieldDescriptor.Type.BYTES + "\"";
-        if (message instanceof FloatValue) return "\"" + Descriptors.FieldDescriptor.Type.FLOAT + "\"";
-        if (message instanceof DoubleValue) return "\"" + Descriptors.FieldDescriptor.Type.DOUBLE + "\"";
-        if (message instanceof Timestamp) return "\"" + Descriptors.FieldDescriptor.Type.STRING + "\"";
-
-        StringBuilder builder = new StringBuilder();
-        buildSchema(message.getDescriptorForType(), builder);
-        return builder.toString();
+        generator.flush();
     }
 
-    private static void buildSchema(Descriptors.Descriptor descriptor, StringBuilder builder) {
-        List<Descriptors.FieldDescriptor> fields = descriptor.getFields();
-        if (fields.size() == 0) {
-            builder.append(descriptor.getName());
-            return;
-        }
-        builder.append("{");
-        for (int i = 0; i < fields.size(); ++i) {
-            if (i > 0) {
-                builder.append(",");
-            }
-            Descriptors.FieldDescriptor f = fields.get(i);
-            builder.append(f.getName()).append(":");
+    private static void buildSchema(JsonGenerator generator, Descriptors.Descriptor descriptor) throws IOException {
+        generator.writeStartObject();
+        for (Descriptors.FieldDescriptor f: descriptor.getFields()) {
+            generator.writeFieldName(f.getName());
             if (f.isRepeated()) {
-                builder.append("[");
+                generator.writeStartArray();
                 if (f.isMapField()) {
-                    builder.append("\"MAP\",");
+                    generator.writeString("MAP");
                 } else {
-                    builder.append("\"LIST\",");
+                    generator.writeString("LIST");
                 }
-                appendFieldValue(f, builder);
-                builder.append("]");
+                appendFieldValue(generator, f);
+                generator.writeEndArray();
             } else {
-                appendFieldValue(f, builder);
+                appendFieldValue(generator, f);
             }
         }
-        builder.append("}");
+        generator.writeEndObject();
     }
 
-    private static void appendFieldValue(Descriptors.FieldDescriptor field, StringBuilder builder) {
+    private static void appendFieldValue(JsonGenerator generator, Descriptors.FieldDescriptor field) throws IOException {
         Descriptors.FieldDescriptor.Type t = field.getType();
         if (t == Descriptors.FieldDescriptor.Type.MESSAGE) {
-            buildSchema(field.getMessageType(), builder);
+            buildSchema(generator, field.getMessageType());
         } else if (t == Descriptors.FieldDescriptor.Type.ENUM) {
-            builder.append("\"(");
-            List<Descriptors.EnumValueDescriptor> values = field.getEnumType().getValues();
-            for (int j = 0; j < values.size(); ++j) {
-                if (j > 0) {
-                    builder.append("|");
-                }
-                builder.append(values.get(j).getName());
+            generator.writeStartArray();
+            generator.writeString("ENUM");
+            for (Descriptors.EnumValueDescriptor v: field.getEnumType().getValues()) {
+                generator.writeString(v.toString());
             }
-            builder.append(")\"");
+            generator.writeEndArray();
         } else {
-            builder.append('"').append(t).append('"');
+            generator.writeString(t.toString());
         }
     }
 }
