@@ -64,19 +64,32 @@ public class Protoson {
         };
     }
 
+    public static ApiHandler<MethodAndArgs, CompletableFuture<ResultOrError>> createReflectHandler(Object implement) {
+        return methodAndArgs -> {
+            try {
+                Object ret = methodAndArgs.getMethod().invoke(implement, methodAndArgs.getArgs());
+                if (ret instanceof CompletableFuture<?>) {
+                    return ((CompletableFuture<?>) ret).thenApply(ResultOrError::fromResult)
+                            .exceptionally(ResultOrError::fromError);
+                }
+                return CompletableFuture.completedFuture(ResultOrError.fromResult(ret));
+            } catch (Throwable e) {
+                return CompletableFuture.completedFuture(ResultOrError.fromError(e));
+            }
+        };
+    }
     public static IHttpController createHttpController(Class<?> interfaceClass, Object implement, ErrorCodec errorCodec) {
+        return createHttpController(interfaceClass, implement, errorCodec, createReflectHandler(implement));
+    }
+
+    public static IHttpController createHttpController(Class<?> interfaceClass, Object implement, ErrorCodec errorCodec,
+            ApiHandler<MethodAndArgs, CompletableFuture<ResultOrError>> handler) {
         ReflectServerCodec codec1 = ReflectServerCodec.create(interfaceClass, implement, errorCodec);
         HttpServerCodec codec2 = new HttpServerCodec();
         return new HttpApiController(r -> {
             try {
                 MethodAndArgs methodAndArgs = codec1.decodeRequest(codec2.decodeRequest(r));
-                Object ret = methodAndArgs.getMethod().invoke(implement, methodAndArgs.getArgs());
-                if (ret instanceof CompletableFuture<?>) {
-                    return ((CompletableFuture<?>) ret).thenApply(o -> codec1.encodeResponse(ResultOrError.fromResult(o)))
-                            .exceptionally(throwable -> codec1.encodeResponse(ResultOrError.fromError(throwable)))
-                            .thenApply(codec2::encodeResponse);
-                }
-                return CompletableFuture.completedFuture(codec2.encodeResponse(codec1.encodeResponse(ResultOrError.fromResult(ret))));
+                return handler.call(methodAndArgs).thenApply(resultOrError -> codec2.encodeResponse(codec1.encodeResponse(resultOrError)));
             } catch (Throwable e) {
                 return CompletableFuture.completedFuture(codec2.encodeResponse(codec1.encodeResponse(ResultOrError.fromError(e))));
             }
@@ -111,16 +124,17 @@ public class Protoson {
     }
 
     public static CliEvaluator createLocalCliEvaluator(Class<?> interfaceClass, Object implement, ErrorCodec errorCodec, String description) {
+        return createLocalCliEvaluator(interfaceClass, implement, errorCodec, description, createReflectHandler(implement));
+    }
+
+    public static CliEvaluator createLocalCliEvaluator(Class<?> interfaceClass, Object implement, ErrorCodec errorCodec, String description,
+            ApiHandler<MethodAndArgs, CompletableFuture<ResultOrError>> handler) {
         CliCodec codec1 = new CliCodec();
         ReflectServerCodec codec2 = ReflectServerCodec.create(interfaceClass, implement, errorCodec);
         return new CliEvaluator(r -> {
             try {
                 MethodAndArgs methodAndArgs = codec2.decodeRequest(codec1.decodeRequest(r));
-                Object ret = methodAndArgs.getMethod().invoke(implement, methodAndArgs.getArgs());
-                if (ret instanceof CompletableFuture<?>) {
-                    return codec1.encodeResponse(codec2.encodeResponse(ResultOrError.fromResult(((CompletableFuture<?>) ret).get())));
-                }
-                return codec1.encodeResponse(codec2.encodeResponse(ResultOrError.fromResult(ret)));
+                return codec1.encodeResponse(codec2.encodeResponse(handler.call(methodAndArgs).get()));
             } catch (Throwable e) {
                 return codec1.encodeResponse(codec2.encodeResponse(ResultOrError.fromError(e)));
             }
