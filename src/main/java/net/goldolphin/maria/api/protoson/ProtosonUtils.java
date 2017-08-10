@@ -113,7 +113,7 @@ public class ProtosonUtils {
     private static void buildSchema(JsonGenerator generator, Descriptors.Descriptor descriptor) throws IOException {
         generator.writeStartObject();
         for (Descriptors.FieldDescriptor f: descriptor.getFields()) {
-            generator.writeFieldName(f.getName());
+            generator.writeFieldName(f.getJsonName());
             if (f.isRepeated()) {
                 generator.writeStartArray();
                 if (f.isMapField()) {
