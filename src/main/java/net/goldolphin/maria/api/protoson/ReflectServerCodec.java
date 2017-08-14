@@ -71,12 +71,12 @@ public class ReflectServerCodec implements ApiServerCodec<MethodAndArgs, ResultO
         }
     }
 
-    public static ReflectServerCodec create(Class<?> interfaceClass, Object implement, ErrorCodec errorCodec) {
+    public static ReflectServerCodec create(Class<?> interfaceClass, Class<?> implementClass, ErrorCodec errorCodec) {
         Map<String, Entry> map = new HashMap<>();
         for (Method m: (Iterable<Method>) ProtosonUtils.readInterface(interfaceClass)::iterator) {
             try {
-                Method method = implement.getClass().getMethod(m.getName(), m.getParameterTypes());
-                if (map.putIfAbsent(method.getName(), new Entry(method, ProtosonUtils.getRequestPrototype(method))) != null){
+                Method method = implementClass.getMethod(m.getName(), m.getParameterTypes());
+                if (map.putIfAbsent(method.getName(), new Entry(method, ProtosonUtils.getRequestPrototype(method))) != null) {
                     throw new IllegalArgumentException("Duplicate method name: " + method.getName());
                 }
             } catch (Exception e) {
