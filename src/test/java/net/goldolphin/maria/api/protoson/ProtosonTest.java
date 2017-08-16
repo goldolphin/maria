@@ -19,6 +19,7 @@ import com.google.protobuf.Message;
 import com.google.protobuf.StringValue;
 
 import net.goldolphin.maria.HttpClient;
+import net.goldolphin.maria.HttpContext;
 import net.goldolphin.maria.HttpDispatcher;
 import net.goldolphin.maria.HttpServer;
 import net.goldolphin.maria.api.cli.CliEvaluator;
@@ -72,7 +73,9 @@ public class ProtosonTest {
 
     private interface ApiClient {
         CompletableFuture<Int64Value> get10();
+
         CompletableFuture<DoubleValue> sin(DoubleValue value);
+
         DoubleValue sinSync(DoubleValue value);
     }
 
@@ -81,12 +84,24 @@ public class ProtosonTest {
             return Int64Value.newBuilder().setValue(10).build();
         }
 
+        public Int64Value get10(HttpContext context) {
+            return get10();
+        }
+
         public CompletableFuture<DoubleValue> sin(DoubleValue value) {
             return CompletableFuture.completedFuture(DoubleValue.newBuilder().setValue(Math.sin(value.getValue())).build());
         }
 
+        public CompletableFuture<DoubleValue> sin(DoubleValue value, HttpContext context) {
+            return sin(value);
+        }
+
         public CompletableFuture<DoubleValue> sinSync(DoubleValue value) {
             return sin(value);
+        }
+
+        public CompletableFuture<DoubleValue> sinSync(DoubleValue value, HttpContext context) {
+            return sinSync(value);
         }
     }
 

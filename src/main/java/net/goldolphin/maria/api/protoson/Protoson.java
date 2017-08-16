@@ -9,12 +9,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Function;
 import java.util.stream.Stream;
 
 import com.google.protobuf.Message;
 
-import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpRequest;
 import net.goldolphin.maria.HttpClient;
@@ -62,13 +60,8 @@ public class Protoson {
     public static ApiHandler<MethodAndArgs, CompletableFuture<ResultOrError>> createHttpClientHandler(
             Class<?> interfaceClass, ErrorCodec errorCodec, String serviceBase,
             ApiHandler<HttpRequest, CompletableFuture<FullHttpResponse>> httpHandler) {
-        ReflectClientCodec codec1 = ReflectClientCodec.create(interfaceClass, errorCodec);
-        HttpClientCodec codec2 = new HttpClientCodec(serviceBase);
-        return request1 -> {
-            Request request2 = codec1.encodeRequest(request1);
-            return httpHandler.call(codec2.encodeRequest(request2))
-                    .thenApply(r -> codec1.decodeResponse(request1, codec2.decodeResponse(request2, r)));
-        };
+        HttpClientCodec codec = HttpClientCodec.create(serviceBase, interfaceClass, errorCodec);
+        return request -> httpHandler.call(codec.encodeRequest(request)).thenApply(r -> codec.decodeResponse(request, r));
     }
 
     public static ApiHandler<MethodAndArgs, CompletableFuture<ResultOrError>> createReflectHandler(Object implement) {
@@ -87,21 +80,17 @@ public class Protoson {
     }
 
     public static IHttpController createHttpController(Class<?> interfaceClass, Object implement, ErrorCodec errorCodec) {
-        ApiHandler<MethodAndArgs, CompletableFuture<ResultOrError>> handler = createReflectHandler(implement);
-        return createHttpController(interfaceClass, implement.getClass(), errorCodec, r -> handler);
+        return createHttpController(interfaceClass, implement.getClass(), errorCodec, createReflectHandler(implement));
     }
 
     public static IHttpController createHttpController(Class<?> interfaceClass, Class<?> implementClass, ErrorCodec errorCodec,
-            Function<FullHttpRequest, ApiHandler<MethodAndArgs, CompletableFuture<ResultOrError>>> handlerFactory) {
-        ReflectServerCodec codec1 = ReflectServerCodec.create(interfaceClass, implementClass, errorCodec);
-        HttpServerCodec codec2 = new HttpServerCodec();
-        return new HttpApiController(r -> {
+            ApiHandler<MethodAndArgs, CompletableFuture<ResultOrError>> handler) {
+        HttpServerCodec codec = HttpServerCodec.create(interfaceClass, implementClass, errorCodec);
+        return new HttpApiController(context -> {
             try {
-                MethodAndArgs methodAndArgs = codec1.decodeRequest(codec2.decodeRequest(r));
-                return handlerFactory.apply(r).call(methodAndArgs)
-                        .thenApply(resultOrError -> codec2.encodeResponse(codec1.encodeResponse(resultOrError)));
+                return handler.call(codec.decodeRequest(context)).thenApply(codec::encodeResponse);
             } catch (Throwable e) {
-                return CompletableFuture.completedFuture(codec2.encodeResponse(codec1.encodeResponse(ResultOrError.fromError(e))));
+                return CompletableFuture.completedFuture(codec.encodeResponse(ResultOrError.fromError(e)));
             }
         });
     }
@@ -124,13 +113,9 @@ public class Protoson {
 
     public static ApiHandler<String[], CompletableFuture<String>> createHttpClientHandler(
             String serviceBase, HttpClient httpClient, long timeout, TimeUnit unit) {
-        CliCodec codec1 = new CliCodec();
-        HttpClientCodec codec2 = new HttpClientCodec(serviceBase);
+        HttpCliCodec codec = HttpCliCodec.create(serviceBase);
         HttpApiClientHandler handler = new HttpApiClientHandler(httpClient, timeout, unit);
-        return request1 -> {
-            Request request2 = codec1.decodeRequest(request1);
-            return handler.call(codec2.encodeRequest(request2)).thenApply(r -> codec1.encodeResponse(codec2.decodeResponse(request2, r)));
-        };
+        return request -> handler.call(codec.decodeRequest(request)).thenApply(codec::encodeResponse);
     }
 
     public static CliEvaluator createLocalCliEvaluator(Class<?> interfaceClass, Object implement, ErrorCodec errorCodec, String description) {
@@ -139,14 +124,12 @@ public class Protoson {
 
     public static CliEvaluator createLocalCliEvaluator(Class<?> interfaceClass, Class<?> implementClass, ErrorCodec errorCodec, String description,
             ApiHandler<MethodAndArgs, CompletableFuture<ResultOrError>> handler) {
-        CliCodec codec1 = new CliCodec();
-        ReflectServerCodec codec2 = ReflectServerCodec.create(interfaceClass, implementClass, errorCodec);
+        ReflectCliCodec codec = ReflectCliCodec.create(interfaceClass, implementClass, errorCodec);
         return new CliEvaluator(r -> {
             try {
-                MethodAndArgs methodAndArgs = codec2.decodeRequest(codec1.decodeRequest(r));
-                return codec1.encodeResponse(codec2.encodeResponse(handler.call(methodAndArgs).get()));
+                return codec.encodeResponse(handler.call(codec.decodeRequest(r)).get());
             } catch (Throwable e) {
-                return codec1.encodeResponse(codec2.encodeResponse(ResultOrError.fromError(e)));
+                return codec.encodeResponse(ResultOrError.fromError(e));
             }
         }, createCliCommandHandler(interfaceClass), description);
     }

@@ -9,7 +9,7 @@ public class MethodAndArgs {
     private final Method method;
     private final Object[] args;
 
-    public MethodAndArgs(Method method, Object[] args) {
+    public MethodAndArgs(Method method, Object... args) {
         this.method = method;
         this.args = args;
     }
