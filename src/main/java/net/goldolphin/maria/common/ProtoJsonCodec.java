@@ -16,7 +16,7 @@ import com.google.protobuf.util.JsonFormat;
 public class ProtoJsonCodec {
     private static final JsonFormat.Printer PRINTER = JsonFormat.printer()
             .includingDefaultValueFields().omittingInsignificantWhitespace();
-    private static final JsonFormat.Parser PARSER = JsonFormat.parser();
+    private static final JsonFormat.Parser PARSER = JsonFormat.parser().ignoringUnknownFields();
     private static final Charset UTF8 = Charset.forName("UTF-8");
 
     public static String toString(MessageOrBuilder message) {

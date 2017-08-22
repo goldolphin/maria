@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.google.protobuf.Message;
 
 import io.netty.handler.codec.http.FullHttpResponse;
+import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.util.CharsetUtil;
@@ -68,9 +69,11 @@ public class HttpClientCodec implements ApiClientCodec<MethodAndArgs, ResultOrEr
 
     public static HttpRequest encodeRequest(String serviceBase, String method, String content) {
         String path = UrlUtils.concat(serviceBase, method);
-        return content == null
+        HttpRequest request = content == null
                 ? MessageUtils.newHttpRequest(HttpMethod.POST, path)
                 : MessageUtils.newHttpRequest(HttpMethod.POST, path, content);
+        HttpHeaders.setHeader(request, HttpHeaders.Names.CONTENT_TYPE, "text/json;charset=UTF-8;");
+        return request;
     }
 
     public static HttpClientCodec create(String serviceBase, Class<?> interfaceClass, ErrorCodec errorCodec) {
