@@ -30,7 +30,7 @@ public class ProtosonUtilsTest {
                         "\"requestStreaming\":{\"type\":\"BOOL\"},\"responseTypeUrl\":{\"type\":\"STRING\"}," +
                         "\"responseStreaming\":{\"type\":\"BOOL\"},\"options\":{\"type\":\"LIST\",\"entry\":{\"type\":\"OBJECT\"," +
                         "\"entry\":{\"name\":{\"type\":\"STRING\"},\"value\":{\"type\":\"OBJECT\",\"entry\":{\"typeUrl\":{\"type\":\"STRING\"}," +
-                        "\"value\":{\"type\":\"BYTES\"}}}}}},\"syntax\":{\"type\":\"ENUM\",\"values\":[\"ENUM\",\"SYNTAX_PROTO2\"," +
+                        "\"value\":{\"type\":\"BYTES\"}}}}}},\"syntax\":{\"type\":\"ENUM\",\"values\":[\"SYNTAX_PROTO2\"," +
                         "\"SYNTAX_PROTO3\"]}}}",
                 ProtosonUtils.buildSchemaString(Method.getDefaultInstance(), false));
     }

@@ -152,7 +152,13 @@ public class ProtosonUtils {
         generator.writeFieldName("type");
         generator.writeString("MAP");
         generator.writeFieldName("entry");
-        appendEntrySchema(generator, descriptor, simplified);
+        generator.writeStartObject();
+        Descriptors.Descriptor entry = descriptor.getMessageType();
+        generator.writeFieldName("key");
+        appendEntrySchema(generator, entry.findFieldByName("key"), simplified);
+        generator.writeFieldName("value");
+        appendEntrySchema(generator, entry.findFieldByName("value"), simplified);
+        generator.writeEndObject();
         generator.writeEndObject();
     }
 
@@ -178,7 +184,6 @@ public class ProtosonUtils {
             generator.writeString("ENUM");
             generator.writeFieldName("values");
             generator.writeStartArray();
-            generator.writeString("ENUM");
             for (Descriptors.EnumValueDescriptor v: descriptor.getValues()) {
                 generator.writeString(v.toString());
             }
