@@ -6,6 +6,7 @@ import java.io.OutputStream;
 
 import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -37,6 +38,10 @@ public class JsonUtils {
 
     public static <T> T read(InputStream input, Class<T> clazz) throws IOException {
         return JSON_MAPPER.readValue(input, clazz);
+    }
+
+    public static void verify(String input) throws IOException {
+        read(input, JsonNode.class);
     }
 
     public static JsonFactory factory() {

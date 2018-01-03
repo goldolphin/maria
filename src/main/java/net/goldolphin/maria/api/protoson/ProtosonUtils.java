@@ -72,77 +72,129 @@ public class ProtosonUtils {
     }
 
     public static String buildSchemaString(Message message) {
+        return buildSchemaString(message, true);
+    }
+
+    public static String buildSchemaString(Message message, boolean simplified) {
         StringWriter writer = new StringWriter();
         try {
-            buildSchema(JsonUtils.factory().createGenerator(writer), message);
+            appendSchema(JsonUtils.factory().createGenerator(writer), message, simplified);
             return writer.toString();
         } catch (IOException e) {
             throw ExceptionUtils.toUnchecked(e);
         }
     }
 
-    public static void buildSchema(JsonGenerator generator, Message message) throws IOException {
+    public static void appendSchema(JsonGenerator generator, Message message, boolean simplified) throws IOException {
         if (message == null) {
             generator.writeNull();
         } else if (message instanceof BoolValue) {
-            generator.writeString(Descriptors.FieldDescriptor.Type.BOOL.toString());
+            appendScalarSchema(generator, Descriptors.FieldDescriptor.Type.BOOL.toString(), simplified);
         } else if (message instanceof Int32Value) {
-            generator.writeString(Descriptors.FieldDescriptor.Type.INT32.toString());
+            appendScalarSchema(generator, Descriptors.FieldDescriptor.Type.INT32.toString(), simplified);
         } else if (message instanceof UInt32Value) {
-            generator.writeString(Descriptors.FieldDescriptor.Type.UINT32.toString());
+            appendScalarSchema(generator, Descriptors.FieldDescriptor.Type.UINT32.toString(), simplified);
         } else if (message instanceof Int64Value) {
-            generator.writeString(Descriptors.FieldDescriptor.Type.INT64.toString());
+            appendScalarSchema(generator, Descriptors.FieldDescriptor.Type.INT64.toString(), simplified);
         } else if (message instanceof UInt64Value) {
-            generator.writeString(Descriptors.FieldDescriptor.Type.UINT64.toString());
+            appendScalarSchema(generator, Descriptors.FieldDescriptor.Type.UINT64.toString(), simplified);
         } else if (message instanceof StringValue) {
-            generator.writeString(Descriptors.FieldDescriptor.Type.STRING.toString());
+            appendScalarSchema(generator, Descriptors.FieldDescriptor.Type.STRING.toString(), simplified);
         } else if (message instanceof BytesValue) {
-            generator.writeString(Descriptors.FieldDescriptor.Type.BYTES.toString());
+            appendScalarSchema(generator, Descriptors.FieldDescriptor.Type.BYTES.toString(), simplified);
         } else if (message instanceof FloatValue) {
-            generator.writeString(Descriptors.FieldDescriptor.Type.FLOAT.toString());
+            appendScalarSchema(generator, Descriptors.FieldDescriptor.Type.FLOAT.toString(), simplified);
         } else if (message instanceof DoubleValue) {
-            generator.writeString(Descriptors.FieldDescriptor.Type.DOUBLE.toString());
+            appendScalarSchema(generator, Descriptors.FieldDescriptor.Type.DOUBLE.toString(), simplified);
         } else if (message instanceof Timestamp) {
-            generator.writeString(Descriptors.FieldDescriptor.Type.STRING.toString());
+            appendScalarSchema(generator, Descriptors.FieldDescriptor.Type.STRING.toString(), simplified);
         } else {
-            buildSchema(generator, message.getDescriptorForType());
+            appendObjectSchema(generator, message.getDescriptorForType(), simplified);
         }
         generator.flush();
     }
 
-    private static void buildSchema(JsonGenerator generator, Descriptors.Descriptor descriptor) throws IOException {
+    private static void appendEntrySchema(JsonGenerator generator, Descriptors.FieldDescriptor descriptor, boolean simplified) throws IOException {
+        Descriptors.FieldDescriptor.Type type = descriptor.getType();
+        if (type == Descriptors.FieldDescriptor.Type.MESSAGE) {
+            appendObjectSchema(generator, descriptor.getMessageType(), simplified);
+        } else if (type == Descriptors.FieldDescriptor.Type.ENUM) {
+            appendEnumSchema(generator, descriptor.getEnumType(), simplified);
+        } else {
+            appendScalarSchema(generator, type.name(), simplified);
+        }
+    }
+
+    private static void appendObjectSchema(JsonGenerator generator, Descriptors.Descriptor descriptor, boolean simplified) throws IOException {
         generator.writeStartObject();
-        for (Descriptors.FieldDescriptor f: descriptor.getFields()) {
-            generator.writeFieldName(f.getJsonName());
-            if (f.isRepeated()) {
-                generator.writeStartArray();
-                if (f.isMapField()) {
-                    generator.writeString("MAP");
+        generator.writeFieldName("type");
+        generator.writeString("OBJECT");
+        generator.writeFieldName("entry");
+        generator.writeStartObject();
+        for (Descriptors.FieldDescriptor field: descriptor.getFields()) {
+            generator.writeFieldName(field.getJsonName());
+            if (field.isRepeated()) {
+                if (field.isMapField()) {
+                    appendMapSchema(generator, field, simplified);
                 } else {
-                    generator.writeString("LIST");
+                    appendListSchema(generator, field, simplified);
                 }
-                appendFieldValue(generator, f);
-                generator.writeEndArray();
             } else {
-                appendFieldValue(generator, f);
+                appendEntrySchema(generator, field, simplified);
             }
         }
         generator.writeEndObject();
+        generator.writeEndObject();
     }
 
-    private static void appendFieldValue(JsonGenerator generator, Descriptors.FieldDescriptor field) throws IOException {
-        Descriptors.FieldDescriptor.Type t = field.getType();
-        if (t == Descriptors.FieldDescriptor.Type.MESSAGE) {
-            buildSchema(generator, field.getMessageType());
-        } else if (t == Descriptors.FieldDescriptor.Type.ENUM) {
+    private static void appendMapSchema(JsonGenerator generator, Descriptors.FieldDescriptor descriptor, boolean simplified) throws IOException {
+        generator.writeStartObject();
+        generator.writeFieldName("type");
+        generator.writeString("MAP");
+        generator.writeFieldName("entry");
+        appendEntrySchema(generator, descriptor, simplified);
+        generator.writeEndObject();
+    }
+
+    private static void appendListSchema(JsonGenerator generator, Descriptors.FieldDescriptor descriptor, boolean simplified) throws IOException {
+        generator.writeStartObject();
+        generator.writeFieldName("type");
+        generator.writeString("LIST");
+        generator.writeFieldName("entry");
+        appendEntrySchema(generator, descriptor, simplified);
+        generator.writeEndObject();
+    }
+
+    private static void appendEnumSchema(JsonGenerator generator, Descriptors.EnumDescriptor descriptor, boolean simplified) throws IOException {
+        if (simplified) {
             generator.writeStartArray();
-            generator.writeString("ENUM");
-            for (Descriptors.EnumValueDescriptor v: field.getEnumType().getValues()) {
+            for (Descriptors.EnumValueDescriptor v: descriptor.getValues()) {
                 generator.writeString(v.toString());
             }
             generator.writeEndArray();
         } else {
-            generator.writeString(t.toString());
+            generator.writeStartObject();
+            generator.writeFieldName("type");
+            generator.writeString("ENUM");
+            generator.writeFieldName("values");
+            generator.writeStartArray();
+            generator.writeString("ENUM");
+            for (Descriptors.EnumValueDescriptor v: descriptor.getValues()) {
+                generator.writeString(v.toString());
+            }
+            generator.writeEndArray();
+            generator.writeEndObject();
+        }
+    }
+
+    private static void appendScalarSchema(JsonGenerator generator, String type, boolean simplified) throws IOException {
+        if (simplified) {
+            generator.writeString(type);
+        } else {
+            generator.writeStartObject();
+            generator.writeFieldName("type");
+            generator.writeString(type);
+            generator.writeEndObject();
         }
     }
 }
