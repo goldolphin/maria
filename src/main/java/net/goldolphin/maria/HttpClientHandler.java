@@ -5,8 +5,10 @@ import java.util.concurrent.CompletableFuture;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
+import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.FullHttpResponse;
 
 /**
@@ -21,8 +23,15 @@ public class HttpClientHandler extends SimpleChannelInboundHandler<FullHttpRespo
         this.future = future;
     }
 
-    protected void channelRead0(ChannelHandlerContext channelHandlerContext, FullHttpResponse fullHttpResponse) throws Exception {
-        future.complete(fullHttpResponse);
+    protected void channelRead0(ChannelHandlerContext channelHandlerContext, FullHttpResponse response) throws Exception {
+        // Ensure that we copied a response with unpooled buffer.
+        DefaultFullHttpResponse copy = new DefaultFullHttpResponse(
+                response.getProtocolVersion(),
+                response.getStatus(),
+                Unpooled.copiedBuffer(response.content()));
+        copy.headers().set(response.headers());
+        copy.trailingHeaders().set(response.trailingHeaders());
+        future.complete(copy);
     }
 
     @Override
