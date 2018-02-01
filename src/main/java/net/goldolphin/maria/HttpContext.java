@@ -1,6 +1,8 @@
 package net.goldolphin.maria;
 
-import net.goldolphin.maria.common.MessageUtils;
+import static io.netty.handler.codec.http.HttpResponseStatus.NOT_FOUND;
+import static io.netty.handler.codec.http.HttpResponseStatus.OK;
+
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
@@ -9,9 +11,7 @@ import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpResponse;
 import io.netty.handler.codec.http.HttpResponseStatus;
-
-import static io.netty.handler.codec.http.HttpResponseStatus.NOT_FOUND;
-import static io.netty.handler.codec.http.HttpResponseStatus.OK;
+import net.goldolphin.maria.common.MessageUtils;
 
 /**
  * @author caofuxiang
@@ -35,8 +35,12 @@ public class HttpContext {
     }
 
     public void send(HttpResponse res) {
+        boolean keepAlive = HttpHeaders.isKeepAlive(request);
+        HttpHeaders.setKeepAlive(res, keepAlive && res.getStatus().equals(OK));
         ChannelFuture f = underlyingContext.writeAndFlush(res);
-        if (!(HttpHeaders.isKeepAlive(request) && res.getStatus().code() == OK.code())) {
+
+        // Initiate to close only if error occurs on a keep-alive connection.
+        if (keepAlive && !res.getStatus().equals(OK)) {
             f.addListener(ChannelFutureListener.CLOSE);
         }
     }
