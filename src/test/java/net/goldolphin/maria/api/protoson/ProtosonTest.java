@@ -6,9 +6,9 @@ import java.io.StringReader;
 import java.io.StringWriter;
 import java.io.Writer;
 import java.net.InetSocketAddress;
+import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
 
 import org.junit.Assert;
 import org.junit.Test;
@@ -39,7 +39,7 @@ public class ProtosonTest {
         try {
             httpServer.start();
             ApiClient apiClient = Protoson.createClient(ApiClient.class, new MyErrorCodec(), "http://localhost:6061/api",
-                    httpClient, 10, TimeUnit.SECONDS);
+                    httpClient, Duration.ofSeconds(10));
 
             Assert.assertEquals(10, apiClient.get10().get().getValue());
             Assert.assertEquals(Math.sin(100), apiClient.sin(DoubleValue.newBuilder().setValue(100).build()).get().getValue(), 0);

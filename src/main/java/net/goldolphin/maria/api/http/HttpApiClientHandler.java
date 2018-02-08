@@ -1,7 +1,7 @@
 package net.goldolphin.maria.api.http;
 
+import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
 
 import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpRequest;
@@ -15,18 +15,16 @@ import net.goldolphin.maria.api.InvalidHttpStatusException;
  */
 public class HttpApiClientHandler implements ApiHandler<HttpRequest, CompletableFuture<FullHttpResponse>> {
     private final HttpClient httpClient;
-    private final long timeout;
-    private final TimeUnit unit;
+    private final Duration timeout;
 
-    public HttpApiClientHandler(HttpClient httpClient, long timeout, TimeUnit unit) {
+    public HttpApiClientHandler(HttpClient httpClient, Duration timeout) {
         this.httpClient = httpClient;
         this.timeout = timeout;
-        this.unit = unit;
     }
 
     @Override
     public CompletableFuture<FullHttpResponse> call(HttpRequest request) {
-        return httpClient.execute(request, timeout, unit)
+        return httpClient.execute(request, timeout)
                 .thenApply(response -> {
                     if (response.getStatus().equals(HttpResponseStatus.OK)) {
                         return response;

@@ -2,13 +2,13 @@ package net.goldolphin.maria.api.protoson;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
 import com.google.protobuf.Message;
@@ -31,10 +31,10 @@ import net.goldolphin.maria.common.ExceptionUtils;
  */
 public class Protoson {
     public static <T> T createClient(Class<?> interfaceClass, ErrorCodec errorCodec, String serviceBase,
-            HttpClient httpClient, long timeout, TimeUnit unit) {
+            HttpClient httpClient, Duration timeout) {
         return createClient(
                 interfaceClass,
-                createHttpClientHandler(interfaceClass, errorCodec, serviceBase, new HttpApiClientHandler(httpClient, timeout, unit)));
+                createHttpClientHandler(interfaceClass, errorCodec, serviceBase, new HttpApiClientHandler(httpClient, timeout)));
     }
 
     public static <T> T createClient(Class<?> interfaceClass, ApiHandler<MethodAndArgs, CompletableFuture<ResultOrError>> clientHandler) {
@@ -95,9 +95,9 @@ public class Protoson {
         });
     }
 
-    public static CliEvaluator createHttpCliEvaluator(Class<?> interfaceClass, String serviceBase, HttpClient httpClient, long timeout, TimeUnit unit,
+    public static CliEvaluator createHttpCliEvaluator(Class<?> interfaceClass, String serviceBase, HttpClient httpClient, Duration timeout,
             String description) {
-        return createHttpCliEvaluator(interfaceClass, createHttpClientHandler(serviceBase, httpClient, timeout, unit), description);
+        return createHttpCliEvaluator(interfaceClass, createHttpClientHandler(serviceBase, httpClient, timeout), description);
     }
 
     public static CliEvaluator createHttpCliEvaluator(Class<?> interfaceClass, ApiHandler<String[], CompletableFuture<String>> clientHandler,
@@ -112,9 +112,9 @@ public class Protoson {
     }
 
     public static ApiHandler<String[], CompletableFuture<String>> createHttpClientHandler(
-            String serviceBase, HttpClient httpClient, long timeout, TimeUnit unit) {
+            String serviceBase, HttpClient httpClient, Duration timeout) {
         HttpCliCodec codec = HttpCliCodec.create(serviceBase);
-        HttpApiClientHandler handler = new HttpApiClientHandler(httpClient, timeout, unit);
+        HttpApiClientHandler handler = new HttpApiClientHandler(httpClient, timeout);
         return request -> handler.call(codec.decodeRequest(request)).thenApply(codec::encodeResponse);
     }
 
