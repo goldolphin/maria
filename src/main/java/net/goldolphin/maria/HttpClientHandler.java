@@ -23,7 +23,7 @@ public class HttpClientHandler extends SimpleChannelInboundHandler<FullHttpRespo
         this.future = future;
     }
 
-    protected void channelRead0(ChannelHandlerContext channelHandlerContext, FullHttpResponse response) throws Exception {
+    protected void channelRead0(ChannelHandlerContext ctx, FullHttpResponse response) throws Exception {
         // Ensure that we copied a response with unpooled buffer.
         DefaultFullHttpResponse copy = new DefaultFullHttpResponse(
                 response.getProtocolVersion(),
@@ -32,6 +32,7 @@ public class HttpClientHandler extends SimpleChannelInboundHandler<FullHttpRespo
         copy.headers().set(response.headers());
         copy.trailingHeaders().set(response.trailingHeaders());
         future.complete(copy);
+        ctx.close();
     }
 
     @Override

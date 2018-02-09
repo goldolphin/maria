@@ -39,8 +39,8 @@ public class HttpContext {
         HttpHeaders.setKeepAlive(res, keepAlive && res.getStatus().equals(OK));
         ChannelFuture f = underlyingContext.writeAndFlush(res);
 
-        // Initiate to close only if error occurs on a keep-alive connection.
-        if (keepAlive && !res.getStatus().equals(OK)) {
+        // Initiate to close when error occurs or keep-alive is not set.
+        if (!(keepAlive && res.getStatus().equals(OK))) {
             f.addListener(ChannelFutureListener.CLOSE);
         }
     }

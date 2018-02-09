@@ -96,6 +96,7 @@ public class HttpClient {
         int port;
         boolean isHttps;
         try {
+            HttpHeaders.setKeepAlive(request, false);
             URI uri = new URI(request.getUri());
             host = uri.getHost();
             String scheme = uri.getScheme().toLowerCase();
