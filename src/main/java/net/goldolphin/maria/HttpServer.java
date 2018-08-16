@@ -57,6 +57,7 @@ public class HttpServer {
                         pipeline.addLast("handler", handler);
                     }
                 }) // (4)
+                .option(ChannelOption.SO_REUSEADDR, true)
                 .option(ChannelOption.SO_BACKLOG, 128);          // (5)
                 // .childOption(ChannelOption.SO_KEEPALIVE, true); // (6)
     }

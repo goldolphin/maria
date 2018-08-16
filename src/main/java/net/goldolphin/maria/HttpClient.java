@@ -1,5 +1,6 @@
 package net.goldolphin.maria;
 
+import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.time.Duration;
@@ -44,6 +45,7 @@ public class HttpClient {
     private final EventLoopGroup workerGroup;
     private final Bootstrap bootstrap;
     private final AddressResolver addressResolver;
+    private final ChannelPool channelPool;
 
     static {
         SslContextBuilder builder = SslContextBuilder.forClient().trustManager(InsecureTrustManagerFactory.INSTANCE);
@@ -71,6 +73,10 @@ public class HttpClient {
     }
 
     public HttpClient(int maxContentLength, EventLoopGroup workerGroup, AddressResolver addressResolver) {
+        this(maxContentLength, workerGroup, addressResolver, 20);
+    }
+
+    public HttpClient(int maxContentLength, EventLoopGroup workerGroup, AddressResolver addressResolver, int poolCapacity) {
         this.workerGroup = workerGroup; // (1)
         bootstrap = new Bootstrap(); // (2)
         bootstrap.group(workerGroup)
@@ -84,6 +90,7 @@ public class HttpClient {
                     }
                 }); // (4)
         this.addressResolver = addressResolver;
+        this.channelPool = new ChannelPool(poolCapacity);
     }
 
     public CompletableFuture<FullHttpResponse> execute(HttpRequest request) {
@@ -91,12 +98,11 @@ public class HttpClient {
     }
 
     public CompletableFuture<FullHttpResponse> execute(HttpRequest request, Duration timeout) {
-        final CompletableFuture<FullHttpResponse> future = new CompletableFuture<>();
         String host;
         int port;
         boolean isHttps;
         try {
-            HttpHeaders.setKeepAlive(request, false);
+            HttpHeaders.setKeepAlive(request, true);
             URI uri = new URI(request.getUri());
             host = uri.getHost();
             String scheme = uri.getScheme().toLowerCase();
@@ -122,35 +128,73 @@ public class HttpClient {
             }
             request.setUri(builder.toString());
         } catch (URISyntaxException e) {
+            CompletableFuture<FullHttpResponse> future = new CompletableFuture<>();
             future.completeExceptionally(e);
             return future;
         }
         // Do not throw exceptions in listeners, because they will all be swallowed by netty.
-        bootstrap.connect(addressResolver.resolve(host, port)).addListener((ChannelFutureListener) f -> {
-            if (f.isSuccess()) {
-                final Channel channel = f.channel();
-                if (isHttps) {
-                    channel.pipeline().addFirst("ssl", SSL_CONTEXT.newHandler(channel.alloc()));
-                }
-                channel.pipeline().addLast("handler", new HttpClientHandler(future));
-                channel.writeAndFlush(request).addListener((ChannelFutureListener) f1 -> {
-                    if (f1.isSuccess()) {
-                        if (timeout != null) {
-                            f1.channel().eventLoop().schedule(() -> {
-                                future.completeExceptionally(new HttpTimeoutException("Time is out"));
-                                channel.close();
-                            }, timeout.toMillis(), TimeUnit.MILLISECONDS);
-                        }
+        InetSocketAddress remoteAddress = addressResolver.resolve(host, port);
+        return connect(remoteAddress).thenCompose(channel -> send(channel, request, isHttps, timeout)
+                .whenComplete((r, ex) -> {
+                    if (ex == null && HttpHeaders.isKeepAlive(request)) {
+                        channelPool.release(remoteAddress, channel);
                     } else {
-                        future.completeExceptionally(f1.cause());
                         channel.close();
                     }
-                });
+                }));
+    }
+
+    private CompletableFuture<FullHttpResponse> send(Channel channel, HttpRequest request, boolean isHttps, Duration timeout) {
+        CompletableFuture<FullHttpResponse> future = new CompletableFuture<>();
+        if (isHttps) {
+            channel.pipeline().addFirst("ssl", SSL_CONTEXT.newHandler(channel.alloc()));
+        }
+        channel.pipeline().addLast("handler", new HttpClientHandler(future));
+        channel.writeAndFlush(request).addListener((ChannelFutureListener) f -> {
+            if (f.isSuccess()) {
+                if (timeout != null) {
+                    f.channel().eventLoop().schedule(() -> {
+                        future.completeExceptionally(new HttpTimeoutException("Time is out"));
+                    }, timeout.toMillis(), TimeUnit.MILLISECONDS);
+                }
+            } else {
+                future.completeExceptionally(f.cause());
+            }
+        });
+        return future.thenApply(r -> {
+            if (isHttps) {
+                channel.pipeline().remove("ssl");
+            }
+            channel.pipeline().remove("handler");
+            return r;
+        });
+    }
+
+    private CompletableFuture<Channel> connect(InetSocketAddress remoteAddress) {
+        Channel channel = channelPool.acquire(remoteAddress);
+        if (channel != null && channel.isActive()) {
+            return CompletableFuture.completedFuture(channel);
+        }
+        CompletableFuture<Channel> future = new CompletableFuture<>();
+        // Do not throw exceptions in listeners, because they will all be swallowed by netty.
+        bootstrap.connect(remoteAddress).addListener((ChannelFutureListener) f -> {
+            if (f.isSuccess()) {
+                future.complete(f.channel());
             } else {
                 future.completeExceptionally(f.cause());
             }
         });
         return future;
+    }
+
+    public void close(boolean stopEventLoop) {
+        try {
+            channelPool.close();
+        } finally {
+            if (stopEventLoop) {
+                workerGroup.shutdownGracefully();
+            }
+        }
     }
 
     public EventLoopGroup getWorkerGroup() {

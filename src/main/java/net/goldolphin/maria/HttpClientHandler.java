@@ -19,7 +19,7 @@ public class HttpClientHandler extends SimpleChannelInboundHandler<FullHttpRespo
     private static final Logger logger = LoggerFactory.getLogger(HttpClientHandler.class);
     private final CompletableFuture<FullHttpResponse> future;
 
-    public HttpClientHandler(CompletableFuture<FullHttpResponse> future) {
+    HttpClientHandler(CompletableFuture<FullHttpResponse> future) {
         this.future = future;
     }
 
@@ -32,13 +32,11 @@ public class HttpClientHandler extends SimpleChannelInboundHandler<FullHttpRespo
         copy.headers().set(response.headers());
         copy.trailingHeaders().set(response.trailingHeaders());
         future.complete(copy);
-        ctx.close();
     }
 
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
         future.completeExceptionally(cause);
-        ctx.close();
     }
 
     @Override

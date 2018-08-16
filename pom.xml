@@ -78,6 +78,18 @@
             <version>2.7.0</version>
             <scope>provided</scope>
         </dependency>
+        <dependency>
+            <groupId>com.yammer.metrics</groupId>
+            <artifactId>metrics-core</artifactId>
+            <version>2.2.0</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.google.guava</groupId>
+            <artifactId>guava</artifactId>
+            <version>23.6-jre</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>

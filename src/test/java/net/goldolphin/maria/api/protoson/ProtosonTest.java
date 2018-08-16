@@ -30,7 +30,7 @@ import net.goldolphin.maria.common.ExceptionUtils;
  */
 public class ProtosonTest {
     @Test
-    public void test() throws NoSuchMethodException, ExecutionException, InterruptedException {
+    public void test() throws Exception {
         // Server
         HttpDispatcher dispatcher = new HttpDispatcher();
         dispatcher.registerController("/api/$", Protoson.createHttpController(ApiClient.class, new Implement(), new MyErrorCodec()));
@@ -44,8 +44,8 @@ public class ProtosonTest {
             Assert.assertEquals(10, apiClient.get10().get().getValue());
             Assert.assertEquals(Math.sin(100), apiClient.sin(DoubleValue.newBuilder().setValue(100).build()).get().getValue(), 0);
         } finally {
+            httpClient.close(true);
             httpServer.stop(true);
-            httpClient.getWorkerGroup().shutdownGracefully();
         }
     }
 

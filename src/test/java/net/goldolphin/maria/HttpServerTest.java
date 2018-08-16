@@ -74,6 +74,7 @@ public class HttpServerTest {
             Assert.assertEquals(request, received);
         }).get();
 
+        client.close(false);
         server.stop(true);
     }
 
