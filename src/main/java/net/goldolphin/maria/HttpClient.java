@@ -134,7 +134,7 @@ public class HttpClient {
         }
         // Do not throw exceptions in listeners, because they will all be swallowed by netty.
         InetSocketAddress remoteAddress = addressResolver.resolve(host, port);
-        return connect(remoteAddress).thenCompose(channel -> send(channel, request, isHttps, timeout)
+        return connect(remoteAddress, isHttps).thenCompose(channel -> send(channel, request, timeout)
                 .whenComplete((r, ex) -> {
                     if (ex == null && HttpHeaders.isKeepAlive(request)) {
                         channelPool.release(remoteAddress, channel);
@@ -144,11 +144,8 @@ public class HttpClient {
                 }));
     }
 
-    private CompletableFuture<FullHttpResponse> send(Channel channel, HttpRequest request, boolean isHttps, Duration timeout) {
+    private CompletableFuture<FullHttpResponse> send(Channel channel, HttpRequest request, Duration timeout) {
         CompletableFuture<FullHttpResponse> future = new CompletableFuture<>();
-        if (isHttps) {
-            channel.pipeline().addFirst("ssl", SSL_CONTEXT.newHandler(channel.alloc()));
-        }
         channel.pipeline().addLast("handler", new HttpClientHandler(future));
         channel.writeAndFlush(request).addListener((ChannelFutureListener) f -> {
             if (f.isSuccess()) {
@@ -162,15 +159,12 @@ public class HttpClient {
             }
         });
         return future.thenApply(r -> {
-            if (isHttps) {
-                channel.pipeline().remove("ssl");
-            }
             channel.pipeline().remove("handler");
             return r;
         });
     }
 
-    private CompletableFuture<Channel> connect(InetSocketAddress remoteAddress) {
+    private CompletableFuture<Channel> connect(InetSocketAddress remoteAddress, boolean isHttps) {
         Channel channel = channelPool.acquire(remoteAddress);
         if (channel != null && channel.isActive()) {
             return CompletableFuture.completedFuture(channel);
@@ -179,7 +173,11 @@ public class HttpClient {
         // Do not throw exceptions in listeners, because they will all be swallowed by netty.
         bootstrap.connect(remoteAddress).addListener((ChannelFutureListener) f -> {
             if (f.isSuccess()) {
-                future.complete(f.channel());
+                Channel c = f.channel();
+                if (isHttps) {
+                    c.pipeline().addFirst("ssl", SSL_CONTEXT.newHandler(c.alloc()));
+                }
+                future.complete(c);
             } else {
                 future.completeExceptionally(f.cause());
             }
