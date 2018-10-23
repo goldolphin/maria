@@ -9,9 +9,6 @@ import java.util.concurrent.TimeUnit;
 
 import javax.net.ssl.SSLException;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFutureListener;
@@ -23,9 +20,10 @@ import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpClientCodec;
-import io.netty.handler.codec.http.HttpHeaders;
+import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpObjectAggregator;
 import io.netty.handler.codec.http.HttpRequest;
+import io.netty.handler.codec.http.HttpUtil;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
@@ -35,7 +33,6 @@ import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
  *         2016-04-04 20:45
  */
 public class HttpClient {
-    private static final Logger logger = LoggerFactory.getLogger(HttpClient.class);
     private static final int DEFAULT_HTTP_PORT = 80;
     private static final int DEFAULT_HTTPS_PORT = 443;
     private static final int DEFAULT_MAX_CONTENT_LENGTH = 1024 * 1024;
@@ -52,7 +49,7 @@ public class HttpClient {
         try {
             SSL_CONTEXT = builder.build();
         } catch (SSLException e) {
-            throw new RuntimeException(e);
+            throw new IllegalStateException(e);  // Should not occur.
         }
     }
 
@@ -102,17 +99,17 @@ public class HttpClient {
         int port;
         boolean isHttps;
         try {
-            HttpHeaders.setKeepAlive(request, true);
-            URI uri = new URI(request.getUri());
+            HttpUtil.setKeepAlive(request, true);
+            URI uri = new URI(request.uri());
             host = uri.getHost();
             String scheme = uri.getScheme().toLowerCase();
             isHttps = scheme.equals("https");
             port = uri.getPort();
             if (port < 0) {
                 port = isHttps ? DEFAULT_HTTPS_PORT : DEFAULT_HTTP_PORT;
-                HttpHeaders.setHost(request, host);
+                request.headers().set(HttpHeaderNames.HOST, host);
             } else {
-                HttpHeaders.setHost(request, host + ":" + port);
+                request.headers().set(HttpHeaderNames.HOST, host + ":" + port);
             }
 
             // Refactor the URI.
@@ -134,9 +131,9 @@ public class HttpClient {
         }
         // Do not throw exceptions in listeners, because they will all be swallowed by netty.
         InetSocketAddress remoteAddress = addressResolver.resolve(host, port);
-        return connect(remoteAddress, isHttps).thenCompose(channel -> send(channel, request, timeout)
+        return connect(remoteAddress, isHttps, host, port).thenCompose(channel -> send(channel, request, timeout)
                 .whenComplete((r, ex) -> {
-                    if (ex == null && HttpHeaders.isKeepAlive(request)) {
+                    if (ex == null && HttpUtil.isKeepAlive(request)) {
                         channelPool.release(remoteAddress, channel);
                     } else {
                         channel.close();
@@ -164,7 +161,7 @@ public class HttpClient {
         });
     }
 
-    private CompletableFuture<Channel> connect(InetSocketAddress remoteAddress, boolean isHttps) {
+    private CompletableFuture<Channel> connect(InetSocketAddress remoteAddress, boolean isHttps, String host, int port) {
         Channel channel = channelPool.acquire(remoteAddress);
         if (channel != null && channel.isActive()) {
             return CompletableFuture.completedFuture(channel);
@@ -175,7 +172,7 @@ public class HttpClient {
             if (f.isSuccess()) {
                 Channel c = f.channel();
                 if (isHttps) {
-                    c.pipeline().addFirst("ssl", SSL_CONTEXT.newHandler(c.alloc()));
+                    c.pipeline().addFirst("ssl", SSL_CONTEXT.newHandler(c.alloc(), host, port));
                 }
                 future.complete(c);
             } else {
