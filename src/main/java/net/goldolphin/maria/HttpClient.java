@@ -145,16 +145,15 @@ public class HttpClient {
         CompletableFuture<FullHttpResponse> future = new CompletableFuture<>();
         channel.pipeline().addLast("handler", new HttpClientHandler(future));
         channel.writeAndFlush(request).addListener((ChannelFutureListener) f -> {
-            if (f.isSuccess()) {
-                if (timeout != null) {
-                    f.channel().eventLoop().schedule(() -> {
-                        future.completeExceptionally(new HttpTimeoutException("Time is out"));
-                    }, timeout.toMillis(), TimeUnit.MILLISECONDS);
-                }
-            } else {
+            if (!f.isSuccess()) {
                 future.completeExceptionally(f.cause());
             }
         });
+        if (timeout != null) {
+            channel.eventLoop().schedule(() -> future.completeExceptionally(new HttpTimeoutException("Time is out")),
+                                         timeout.toMillis(),
+                                         TimeUnit.MILLISECONDS);
+        }
         return future.thenApply(r -> {
             channel.pipeline().remove("handler");
             return r;
