@@ -149,15 +149,12 @@ public class HttpClient {
                 future.completeExceptionally(f.cause());
             }
         });
-        if (timeout != null) {
+        if (!future.isDone() && timeout != null) {
             channel.eventLoop().schedule(() -> future.completeExceptionally(new HttpTimeoutException("Time is out")),
                                          timeout.toMillis(),
                                          TimeUnit.MILLISECONDS);
         }
-        return future.thenApply(r -> {
-            channel.pipeline().remove("handler");
-            return r;
-        });
+        return future.whenComplete((r, e) -> channel.pipeline().remove("handler"));
     }
 
     private CompletableFuture<Channel> connect(InetSocketAddress remoteAddress, boolean isHttps, String host, int port) {
