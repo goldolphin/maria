@@ -1,13 +1,12 @@
 package net.goldolphin.maria;
 
-import net.goldolphin.maria.pattern.MatchResult;
-import net.goldolphin.maria.pattern.UrlMatcher;
-import io.netty.handler.codec.http.FullHttpRequest;
+import java.net.URI;
 
 import org.slf4j.LoggerFactory;
 
-import java.net.URI;
-import java.util.Map;
+import io.netty.handler.codec.http.FullHttpRequest;
+import net.goldolphin.maria.pattern.MatchResult;
+import net.goldolphin.maria.pattern.UrlMatcher;
 
 /**
  * Dispatch HTTP requests.
@@ -31,7 +30,7 @@ public class HttpDispatcher {
 
     public void dispatch(HttpContext context) throws Exception {
         FullHttpRequest request = context.getRequest();
-        URI uri = URI.create(request.getUri());
+        URI uri = URI.create(request.uri());
         logger.debug("Path={}, Request={}.", uri, request);
         String path = uri.getPath();
         MatchResult<IHttpController> matchResult = controllerMatcher.match(path);

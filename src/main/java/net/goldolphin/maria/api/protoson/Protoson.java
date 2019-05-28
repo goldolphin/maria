@@ -12,6 +12,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.stream.Stream;
 
 import com.google.protobuf.Message;
+import com.google.protobuf.util.JsonFormat;
 
 import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpRequest;
@@ -25,19 +26,41 @@ import net.goldolphin.maria.api.http.HttpApiController;
 import net.goldolphin.maria.api.reflect.MethodAndArgs;
 import net.goldolphin.maria.api.reflect.ResultOrError;
 import net.goldolphin.maria.common.ExceptionUtils;
+import net.goldolphin.maria.serializer.ProtoJsonSerializer;
+import net.goldolphin.maria.serializer.ProtoSerializer;
 
 /**
  * Created by caofuxiang on 2017/4/20.
  */
-public class Protoson {
-    public static <T> T createClient(Class<?> interfaceClass, ErrorCodec errorCodec, String serviceBase,
-            HttpClient httpClient, Duration timeout) {
-        return createClient(
-                interfaceClass,
-                createHttpClientHandler(interfaceClass, errorCodec, serviceBase, new HttpApiClientHandler(httpClient, timeout)));
+public class Protoson<T> {
+    private static final ProtoSerializer DEFAULT_PROTO_SERIALIZER
+            = new ProtoJsonSerializer(JsonFormat.printer().includingDefaultValueFields().omittingInsignificantWhitespace(),
+                                      JsonFormat.parser().ignoringUnknownFields());
+
+    private final Class<T> interfaceClass;
+    private final ErrorCodec errorCodec;
+    private final ProtoSerializer protoSerializer;
+
+    public static <T> Protoson<T> create(Class<T> interfaceClass, ErrorCodec errorCodec, ProtoSerializer protoSerializer) {
+        return new Protoson<>(interfaceClass, errorCodec, protoSerializer);
     }
 
-    public static <T> T createClient(Class<?> interfaceClass, ApiHandler<MethodAndArgs, CompletableFuture<ResultOrError>> clientHandler) {
+    public static <T> Protoson<T> create(Class<T> interfaceClass, ErrorCodec errorCodec) {
+        return new Protoson<>(interfaceClass, errorCodec, DEFAULT_PROTO_SERIALIZER);
+    }
+
+    private Protoson(Class<T> interfaceClass, ErrorCodec errorCodec, ProtoSerializer protoSerializer) {
+        this.interfaceClass = interfaceClass;
+        this.errorCodec = errorCodec;
+        this.protoSerializer = protoSerializer;
+    }
+
+    public T createClient(String serviceBase, HttpClient httpClient, Duration timeout) {
+        return createClient(createHttpClientHandler(serviceBase, new HttpApiClientHandler(httpClient, timeout)));
+    }
+
+    @SuppressWarnings("unchecked")
+    public T createClient(ApiHandler<MethodAndArgs, CompletableFuture<ResultOrError>> clientHandler) {
         return (T) Proxy.newProxyInstance(interfaceClass.getClassLoader(), new Class<?>[] {interfaceClass}, (proxy, method, args) -> {
             MethodAndArgs methodAndArgs = new MethodAndArgs(method, args);
             if (ProtosonUtils.isAsync(method)) {
@@ -57,10 +80,10 @@ public class Protoson {
         });
     }
 
-    public static ApiHandler<MethodAndArgs, CompletableFuture<ResultOrError>> createHttpClientHandler(
-            Class<?> interfaceClass, ErrorCodec errorCodec, String serviceBase,
+    public ApiHandler<MethodAndArgs, CompletableFuture<ResultOrError>> createHttpClientHandler(
+            String serviceBase,
             ApiHandler<HttpRequest, CompletableFuture<FullHttpResponse>> httpHandler) {
-        HttpClientCodec codec = HttpClientCodec.create(serviceBase, interfaceClass, errorCodec);
+        HttpClientCodec codec = HttpClientCodec.create(serviceBase, interfaceClass, errorCodec, protoSerializer);
         return request -> httpHandler.call(codec.encodeRequest(request)).thenApply(r -> codec.decodeResponse(request, r));
     }
 
@@ -73,39 +96,37 @@ public class Protoson {
                             .exceptionally(ResultOrError::fromError);
                 }
                 return CompletableFuture.completedFuture(ResultOrError.fromResult(ret));
-            } catch (Throwable e) {
+            } catch (Exception e) {
                 return CompletableFuture.completedFuture(ResultOrError.fromError(e));
             }
         };
     }
 
-    public static IHttpController createHttpController(Class<?> interfaceClass, Object implement, ErrorCodec errorCodec) {
-        return createHttpController(interfaceClass, implement.getClass(), errorCodec, createReflectHandler(implement));
+    public IHttpController createHttpController(Object implement) {
+        return createHttpController(implement.getClass(), createReflectHandler(implement));
     }
 
-    public static IHttpController createHttpController(Class<?> interfaceClass, Class<?> implementClass, ErrorCodec errorCodec,
+    public IHttpController createHttpController(Class<?> implementClass,
             ApiHandler<MethodAndArgs, CompletableFuture<ResultOrError>> handler) {
-        HttpServerCodec codec = HttpServerCodec.create(interfaceClass, implementClass, errorCodec);
+        HttpServerCodec codec = HttpServerCodec.create(interfaceClass, implementClass, errorCodec, protoSerializer);
         return new HttpApiController(context -> {
             try {
                 return handler.call(codec.decodeRequest(context)).thenApply(codec::encodeResponse);
-            } catch (Throwable e) {
+            } catch (Exception e) {
                 return CompletableFuture.completedFuture(codec.encodeResponse(ResultOrError.fromError(e)));
             }
         });
     }
 
-    public static CliEvaluator createHttpCliEvaluator(Class<?> interfaceClass, String serviceBase, HttpClient httpClient, Duration timeout,
-            String description) {
-        return createHttpCliEvaluator(interfaceClass, createHttpClientHandler(serviceBase, httpClient, timeout), description);
+    public CliEvaluator createHttpCliEvaluator(String serviceBase, HttpClient httpClient, Duration timeout, String description) {
+        return createHttpCliEvaluator(createHttpClientHandler(serviceBase, httpClient, timeout), description);
     }
 
-    public static CliEvaluator createHttpCliEvaluator(Class<?> interfaceClass, ApiHandler<String[], CompletableFuture<String>> clientHandler,
-            String description) {
+    public CliEvaluator createHttpCliEvaluator(ApiHandler<String[], CompletableFuture<String>> clientHandler, String description) {
         return new CliEvaluator(request -> {
             try {
                 return clientHandler.call(request).get();
-            } catch (Throwable e) {
+            } catch (Exception e) {
                 throw ExceptionUtils.toUnchecked(e);
             }
         }, createCliCommandHandler(interfaceClass), description);
@@ -118,17 +139,18 @@ public class Protoson {
         return request -> handler.call(codec.decodeRequest(request)).thenApply(codec::encodeResponse);
     }
 
-    public static CliEvaluator createLocalCliEvaluator(Class<?> interfaceClass, Object implement, ErrorCodec errorCodec, String description) {
-        return createLocalCliEvaluator(interfaceClass, implement.getClass(), errorCodec, description, createReflectHandler(implement));
+    public CliEvaluator createLocalCliEvaluator(Object implement, String description) {
+        return createLocalCliEvaluator(implement.getClass(), description, createReflectHandler(implement));
     }
 
-    public static CliEvaluator createLocalCliEvaluator(Class<?> interfaceClass, Class<?> implementClass, ErrorCodec errorCodec, String description,
-            ApiHandler<MethodAndArgs, CompletableFuture<ResultOrError>> handler) {
-        ReflectCliCodec codec = ReflectCliCodec.create(interfaceClass, implementClass, errorCodec);
+    public CliEvaluator createLocalCliEvaluator(Class<?> implementClass,
+                                                String description,
+                                                ApiHandler<MethodAndArgs, CompletableFuture<ResultOrError>> handler) {
+        ReflectCliCodec codec = ReflectCliCodec.create(interfaceClass, implementClass, errorCodec, protoSerializer);
         return new CliEvaluator(r -> {
             try {
                 return codec.encodeResponse(handler.call(codec.decodeRequest(r)).get());
-            } catch (Throwable e) {
+            } catch (Exception e) {
                 return codec.encodeResponse(ResultOrError.fromError(e));
             }
         }, createCliCommandHandler(interfaceClass), description);

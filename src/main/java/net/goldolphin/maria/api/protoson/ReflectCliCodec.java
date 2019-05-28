@@ -10,7 +10,7 @@ import net.goldolphin.maria.api.ApiServerCodec;
 import net.goldolphin.maria.api.reflect.MethodAndArgs;
 import net.goldolphin.maria.api.reflect.ResultOrError;
 import net.goldolphin.maria.common.ExceptionUtils;
-import net.goldolphin.maria.common.ProtoJsonCodec;
+import net.goldolphin.maria.serializer.ProtoSerializer;
 
 /**
  * Created by caofuxiang on 2017/4/21.
@@ -18,10 +18,12 @@ import net.goldolphin.maria.common.ProtoJsonCodec;
 public class ReflectCliCodec implements ApiServerCodec<MethodAndArgs, ResultOrError, String[], String> {
     private final Map<String, Entry> map;
     private final ErrorCodec errorCodec;
+    private final ProtoSerializer protoSerializer;
 
-    private ReflectCliCodec(Map<String, Entry> map, ErrorCodec errorCodec) {
+    private ReflectCliCodec(Map<String, Entry> map, ErrorCodec errorCodec, ProtoSerializer protoSerializer) {
         this.map = map;
         this.errorCodec = errorCodec;
+        this.protoSerializer = protoSerializer;
     }
 
     @Override
@@ -43,19 +45,21 @@ public class ReflectCliCodec implements ApiServerCodec<MethodAndArgs, ResultOrEr
             if (entry.requestPrototype == null) {
                 return new MethodAndArgs(entry.method);
             } else {
-                return new MethodAndArgs(entry.method, ProtoJsonCodec.fromString(content, entry.requestPrototype.newBuilderForType()).build());
+                return new MethodAndArgs(entry.method, protoSerializer.fromString(content, entry.requestPrototype.newBuilderForType()).build());
             }
-        } catch (Throwable e) {
+        } catch (Exception e) {
             throw ExceptionUtils.toUnchecked(e);
         }
     }
 
     @Override
     public String encodeResponse(ResultOrError resultOrError) {
-        return HttpServerCodec.encodeResponse(errorCodec, resultOrError);
+        return HttpServerCodec.encodeResponse(errorCodec, resultOrError, protoSerializer);
     }
 
-    public static ReflectCliCodec create(Class<?> interfaceClass, Class<?> implementClass, ErrorCodec errorCodec) {
+    public static ReflectCliCodec create(Class<?> interfaceClass,
+                                         Class<?> implementClass, ErrorCodec errorCodec,
+                                         ProtoSerializer protoSerializer) {
         Map<String, Entry> map = new HashMap<>();
         for (Method method: (Iterable<Method>) ProtosonUtils.readInterface(interfaceClass)::iterator) {
             try {
@@ -70,14 +74,14 @@ public class ReflectCliCodec implements ApiServerCodec<MethodAndArgs, ResultOrEr
                 throw ExceptionUtils.toUnchecked(e);
             }
         }
-        return new ReflectCliCodec(map, errorCodec);
+        return new ReflectCliCodec(map, errorCodec, protoSerializer);
     }
 
     private static class Entry {
         private final Method method;
         private final Message requestPrototype;
 
-        public Entry(Method method, Message requestPrototype) {
+        private Entry(Method method, Message requestPrototype) {
             this.method = method;
             this.requestPrototype = requestPrototype;
         }

@@ -8,7 +8,6 @@ import java.io.Writer;
 import java.net.InetSocketAddress;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 
 import org.junit.Assert;
 import org.junit.Test;
@@ -29,17 +28,18 @@ import net.goldolphin.maria.common.ExceptionUtils;
  * Created by caofuxiang on 2017/4/20.
  */
 public class ProtosonTest {
+    private final Protoson<ApiClient> protoson = Protoson.create(ApiClient.class, new MyErrorCodec());
+
     @Test
     public void test() throws Exception {
         // Server
         HttpDispatcher dispatcher = new HttpDispatcher();
-        dispatcher.registerController("/api/$", Protoson.createHttpController(ApiClient.class, new Implement(), new MyErrorCodec()));
+        dispatcher.registerController("/api/$", protoson.createHttpController(new Implement()));
         HttpServer httpServer = new HttpServer(new InetSocketAddress(6061), dispatcher);
         HttpClient httpClient = new HttpClient();
         try {
             httpServer.start();
-            ApiClient apiClient = Protoson.createClient(ApiClient.class, new MyErrorCodec(), "http://localhost:6061/api",
-                    httpClient, Duration.ofSeconds(10));
+            ApiClient apiClient = protoson.createClient("http://localhost:6061/api", httpClient, Duration.ofSeconds(10));
 
             Assert.assertEquals(10, apiClient.get10().get().getValue());
             Assert.assertEquals(Math.sin(100), apiClient.sin(DoubleValue.newBuilder().setValue(100).build()).get().getValue(), 0);
@@ -50,8 +50,8 @@ public class ProtosonTest {
     }
 
     @Test
-    public void testCli() throws NoSuchMethodException, IOException {
-        CliEvaluator evaluator = Protoson.createLocalCliEvaluator(ApiClient.class, new Implement(), new MyErrorCodec(), "testCli 0.0.1");
+    public void testCli() throws IOException {
+        CliEvaluator evaluator = protoson.createLocalCliEvaluator(new Implement(), "testCli 0.0.1");
         StringBuilder builder = new StringBuilder();
         builder.append("/help\n");
         builder.append("/help get10\n");
