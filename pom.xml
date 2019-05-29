@@ -16,7 +16,7 @@
         <url>https://github.com/goldolphin/maria</url>
         <connection>scm:git:git://github.com/goldolphin/maria.git</connection>
         <developerConnection>scm:git:ssh://git@github.com/goldolphin/maria.git</developerConnection>
-        <tag>maria-0.0.6</tag>
+        <tag>HEAD</tag>
     </scm>
 
     <developers>
@@ -31,7 +31,7 @@
     <groupId>net.goldolphin</groupId>
     <artifactId>maria</artifactId>
     <packaging>jar</packaging>
-    <version>0.0.6</version>
+    <version>0.0.7-SNAPSHOT</version>
     <url>https://github.com/goldolphin/maria</url>
 
     <properties>
