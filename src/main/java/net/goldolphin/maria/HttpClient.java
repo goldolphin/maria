@@ -27,12 +27,13 @@ import io.netty.handler.codec.http.HttpUtil;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
+import net.goldolphin.maria.common.MessageUtils;
 
 /**
  * @author goldolphin
  *         2016-04-04 20:45
  */
-public class HttpClient {
+public class HttpClient implements AutoCloseable {
     private static final int DEFAULT_HTTP_PORT = 80;
     private static final int DEFAULT_HTTPS_PORT = 443;
     private static final int DEFAULT_MAX_CONTENT_LENGTH = 1024 * 1024;
@@ -90,10 +91,21 @@ public class HttpClient {
         this.channelPool = new ChannelPool(poolCapacity);
     }
 
+    /**
+     * Execute http request asynchronously with the default timeout setting (10s).
+     * @param request the request. Use {@link MessageUtils} to construct requests.
+     * @return the response
+     */
     public CompletableFuture<FullHttpResponse> execute(HttpRequest request) {
         return execute(request, DEFAULT_TIMEOUT);
     }
 
+    /**
+     * Execute http request asynchronously.
+     * @param request the request. Use {@link MessageUtils} to construct requests.
+     * @param timeout null means never timing out.
+     * @return the response
+     */
     public CompletableFuture<FullHttpResponse> execute(HttpRequest request, Duration timeout) {
         String host;
         int port;
@@ -131,14 +143,32 @@ public class HttpClient {
         }
         // Do not throw exceptions in listeners, because they will all be swallowed by netty.
         InetSocketAddress remoteAddress = addressResolver.resolve(host, port);
-        return connect(remoteAddress, isHttps, host, port).thenCompose(channel -> send(channel, request, timeout)
-                .whenComplete((r, ex) -> {
-                    if (ex == null && HttpUtil.isKeepAlive(request)) {
-                        channelPool.release(remoteAddress, channel);
-                    } else {
-                        channel.close();
-                    }
-                }));
+        long begin = System.currentTimeMillis();
+        return connect(remoteAddress, isHttps, host, port, timeout).thenCompose(channel -> {
+            final Duration left;
+            if (timeout == null) {
+                left = null;
+            } else {
+                Duration t = timeout.minusMillis(System.currentTimeMillis() - begin);
+                left = t.isNegative() ? Duration.ZERO : t;
+            }
+            return send(channel, request, left)
+                    .whenComplete((r, ex) -> {
+                        if (ex == null && HttpUtil.isKeepAlive(request)) {
+                            channelPool.release(remoteAddress, channel);
+                        } else {
+                            channel.close();
+                        }
+                    });
+        });
+    }
+
+    private static <T> void setTimeout(CompletableFuture<T> future, Duration timeout, EventLoopGroup eventLoop) {
+        if (!future.isDone() && timeout != null) {
+            eventLoop.schedule(() -> future.completeExceptionally(new HttpTimeoutException("Time is out")),
+                               timeout.toMillis(),
+                               TimeUnit.MILLISECONDS);
+        }
     }
 
     private CompletableFuture<FullHttpResponse> send(Channel channel, HttpRequest request, Duration timeout) {
@@ -149,15 +179,11 @@ public class HttpClient {
                 future.completeExceptionally(f.cause());
             }
         });
-        if (!future.isDone() && timeout != null) {
-            channel.eventLoop().schedule(() -> future.completeExceptionally(new HttpTimeoutException("Time is out")),
-                                         timeout.toMillis(),
-                                         TimeUnit.MILLISECONDS);
-        }
+        setTimeout(future, timeout, channel.eventLoop());
         return future.whenComplete((r, e) -> channel.pipeline().remove("handler"));
     }
 
-    private CompletableFuture<Channel> connect(InetSocketAddress remoteAddress, boolean isHttps, String host, int port) {
+    private CompletableFuture<Channel> connect(InetSocketAddress remoteAddress, boolean isHttps, String host, int port, Duration timeout) {
         Channel channel = channelPool.acquire(remoteAddress);
         if (channel != null && channel.isActive()) {
             return CompletableFuture.completedFuture(channel);
@@ -175,6 +201,7 @@ public class HttpClient {
                 future.completeExceptionally(f.cause());
             }
         });
+        setTimeout(future, timeout, bootstrap.config().group());
         return future;
     }
 
@@ -188,7 +215,8 @@ public class HttpClient {
         }
     }
 
-    public EventLoopGroup getWorkerGroup() {
-        return workerGroup;
+    @Override
+    public void close() {
+        close(true);
     }
 }
