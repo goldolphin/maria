@@ -39,7 +39,7 @@ public class CliEvaluator {
                 if (!process(line, output, error)) {
                     break;
                 }
-            } catch (Throwable e) {
+            } catch (Exception e) {
                 error.write(ExceptionUtils.getRootCause(e) + "\n");
             }
         }

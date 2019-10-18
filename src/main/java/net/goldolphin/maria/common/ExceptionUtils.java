@@ -1,5 +1,7 @@
 package net.goldolphin.maria.common;
 
+import com.google.common.base.Throwables;
+
 /**
  * Created by caofuxiang on 2017/2/24.
  */
@@ -14,11 +16,6 @@ public class ExceptionUtils {
     }
 
     public static Throwable getRootCause(Throwable e) {
-        while (true) {
-            if (e.getCause() == null) {
-                return e;
-            }
-            e = e.getCause();
-        }
+        return Throwables.getRootCause(e);
     }
 }
